@@ -318,6 +318,10 @@ before the PREB data.
 A detailed description of the ASCII 64 |nbsp| ms data, copied from the SSC,
 is available as a string in the ``ascii64`` module:  ``ascii64.docn``.
 
+*Note that the BATSE DISC pulse height channels are conventionally numbered
+from 1 to 4, but are accessed in Python code using 0-based indexing, i.e.,
+numbered from 0 to 3.*
+
 ``GRB`` instances have an ``ascii64`` attribute that provides access to the
 ASCII 64 |nbsp| ms data via an ``ASCII64`` object with several attributes and
 one method providing different views of the data.  The aim of this object is
@@ -403,6 +407,13 @@ object.  This object contains ``DRM`` objects that hold the DRM data for each
 triggered detector.  It also provides access to a DRM that sums the response
 of the triggered detectors.
 
+Users should note that the archived DRMs are fairly coarsely sampled.  Also, the
+response for DISC channel 4 is relatively flat over the tabulated range and is
+simply truncated at the high-energy end of the range (about 2 GeV).  Integrals
+of the product of an incident flux model and the channel response will be
+inaccurate if the incident flux does not fall with energy at least as quickly as
+1/E**2.
+
 ``discsc_drms.n_det`` is the number of triggered detectors.  
 
 Two ``discsc_drms`` attributes describe the common format
@@ -473,6 +484,46 @@ incident energy bin centers.
         xlabel(r'$E$ (keV)')
         ylabel(r'$R_i(E)$ (cm$^2$)')
 
+The ``DRMs_DISCSC`` provides a capability to numerically integrate the product
+of an incident spectrum model and the response function for each channel; the
+result is the expected number of detected photons ("counts") in the channel.
+The calculation is done using an interpolatory inner product quadrature rule
+that uses evaluations of the response function and the spectrum at *different*
+points, to account for different availability and scales of variation of the
+factors.  Currently, only one rule is available:  For each incident energy
+interval in a channel response vector, the rule uses the two response values at
+the interval boundaries, and three spectrum values within the interval (located
+at the zeroes of a 2nd-degree Legendre polynomial over the interval).
+
+Current quadrature support is only for the *summed* response.
+
+To set up the rules for the summed response channels for a burst's DISC data,
+call the ``set_sum_prodquad`` method of the burst's ``DRMs_DISCSC`` object.
+This defines a product quadrature rule for each channel; it also compiles
+the nodes (incident energy values used in the rules) and makes them
+available as an array via the ``quad_nodes`` attribute, so
+``quad_nodes[i,j]`` returns the ``j'th`` energy value for channel ``i``.
+The ``chan_quad(i, spec)`` method calculates the quadrature for channel
+``i`` for input spectrum ``spec``.  The spectrum can be provided as a
+function (of incident photon energy), or as a vector of values pre-calculated
+on the nodes (this will be faster if results are sought for more than one
+channel).  If a spectrum function is used that requires arguments besides
+the photon energy, those arguments can be provided to ``chan_quad`` as
+additional arguments; e.g., for a spectrum with parameters ``p1`` and
+``p2``, the signature would be: ``chan_quad(i, spec, p1, p2)``.
+
+The following block of code pre-calculates spectrum values and calculates
+the expected number of counts for BATSE channels 1 and 2 (indices 0 and 1).
+It assumes a spectrum function ``spec(E)`` exists, and that it can accept
+array arguments.
+
+::
+
+    drms = grb.discsc_drms
+    drms.set_sum_prodquad()
+    svals = spec(drms.quad_nodes[0,:])  # channels have common E values
+    exp_cts_0 = drms.chan_quad(0, svals)
+    exp_cts_1 = drms.chan_quad(1, svals)
 
 
 Indices and tables

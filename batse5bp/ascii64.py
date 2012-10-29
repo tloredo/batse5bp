@@ -127,7 +127,8 @@ class ASCII64:
         loaded.
         """
         self.grb = grb
-        a64_path = join(grb.grb_dir, grb.a64_fname)
+        # Note local pkl file name is remote file name + '.pkl'
+        a64_path = join(grb.grb_dir, grb.a64_rfname+'.pkl')
         if exists(a64_path):
             # print 'Reading existing a64 pickle:', a64_path
             ifile = open(a64_path, 'rb')
@@ -136,7 +137,7 @@ class ASCII64:
             for attr in self.pkl_attrs:
                 setattr(self, attr, data[attr])
         else:
-            a64_raw = join(root, raw_cache, grb.a64_fname)
+            a64_raw = join(root, raw_cache, grb.a64_rfname)
             if not exists(a64_raw):
                 # print 'Fetching a64 data from SSC...'
                 urllib.urlretrieve(grb.a64_remote, a64_raw)

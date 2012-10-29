@@ -148,9 +148,15 @@ class CompositeQuad:
 
     def quad(self, f):
         """
-        Evaluate the quadrature of the callable f.
+        Evaluate the quadrature using the callable f or an array of values
+        of the integrand at the nodes.
         """
-        fvals = f(self.nodes)
+        if callable(f):
+            fvals = f(self.nodes)
+        elif len(f) == self.npts:
+            fvals = f
+        else:
+            raise ValueError('Argument must be callable or array of values!')
         self.fvals = fvals
         if self.factor:
             self.ivals = self.factor * self.fvals

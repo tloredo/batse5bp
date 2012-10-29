@@ -80,7 +80,7 @@ class GRB(object):
         self.local_dir = join(self.group, self.dir)
         self.remote_dir = trigger_url + tail
 
-        self.a64_group, self.a64_fname, tail = ascii64_paths(self.trigger)
+        self.a64_group, self.a64_rfname, tail = ascii64_paths(self.trigger)
         self.a64_remote = ascii64_url + tail
 
     def set_bright(self, trigger, cols):
@@ -245,7 +245,7 @@ class GRB(object):
             self.load_ascii64()
             return self.ascii64
         else:
-            raise AttributeError('No such attribute!')
+            raise AttributeError('No attribute "%s"!' % name)
 
     def __str__(self):
         s = 'Trigger:  %i\n' % self.trigger

@@ -119,6 +119,8 @@ def check_comp_fg_case(cq, g, result):
     #print q, result
     assert_almost_equal(q, result)
 
+# Composite (1,1) tests:
+
 def test_comp_trap_cases():
     for g in trap_cases:
         for f, a, b, result in g.cases:
@@ -127,6 +129,20 @@ def test_comp_trap_cases():
             pq2 = ProdQuad11(m, b, m, b, m, b)  # this one without f for init
             cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
             yield check_comp_fg_case, cq, g, result
+
+# Composite (1,2) tests:
+
+comp12_trap_cases = [g_x, g_xm1, g_x2]
+
+def test_comp12_trap_cases():
+    for g in comp12_trap_cases:
+        for f, a, b, result in g.cases:
+            m = b / 3.
+            pq1 = ProdQuad12(a, m, a, m, a, m/2, m, f)  # product trapezoid rule
+            pq2 = ProdQuad12(m, b, m, b, m, m+.3, b)  # this one without f for init
+            cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
+            yield check_comp_fg_case, cq, g, result
+
 
 
 # TODO:  Test non-ufunc signatures.

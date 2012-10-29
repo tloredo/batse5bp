@@ -20,12 +20,14 @@ The last column should exhaust the elements of the compressed drm.
 
 Created 2012-10-16 by Tom Loredo
 """
+
 from os.path import join, exists
 import cPickle
 
-from numpy import zeros, minimum
-
+from numpy import zeros, minimum, array
 import pyfits
+
+from prodquad import ProdQuad12, CompositeQuad
 
 
 # This list of the binary table header fields was obtained from a DISCSC DRM
@@ -185,6 +187,7 @@ class DRMs_DISCSC:
         self.ch_bins = self.detectors[0].ch_bins
         # Incident photon energy "edges;" there should be n_E of these but
         # they are treated as if binned somehow....
+        # TODO:  Verify the same values are used for all detectors.
         self.E_bins = self.detectors[0].E_bins
 
     def load_from_fits(self, fits_path, drm_path, meta_path):
@@ -241,3 +244,66 @@ class DRMs_DISCSC:
         cPickle.dump(self.detectors, ofile, -1)  # use highest protocol
         ofile.close()
 
+    def set_sum_prodquad(self, m=1, n=2):
+        """
+        Set up a composite interpolatory product quadtrature rule for the
+        summed DRM.
+
+        Currently only a composite (1,2) rule is available, with a separate
+        rule for each DRM interval.
+        """
+        # ***Caution***  It's not clear what the energies should be; should
+        # check this against RMFIT.
+        # Use the centers of the intervals defined by the "edges" as the
+        # energies associated with the DRM values.
+
+        # TODO:  Do bookkeeping to keep track of nonzero DRM start entries.
+        # Do this in a way so that the spectrum can be evaluated on one
+        # grid for all channels; coordinate with chan_quad.
+
+        # Build & store a composite rule for each channel.
+
+        if m != 1 and n != 2:
+            raise ValueError('Requested rule unavailable!')
+
+        self.quad_rules = []
+        for ch in range(self.n_ch):
+            rules = []
+            # ns = self.start[ch]  # see TODO above
+            ns = 0
+            E_vals = (self.E_bins[ns:-1] + self.E_bins[1:]) / 2.
+            for i in range(len(E_vals)-1):
+                l, u = E_vals[i], E_vals[i+1]
+                fvals = self.drm[ch,i:i+2]
+                pq = ProdQuad12(l, u, l, u, fvals=fvals)  # use Gauss-Legendre g nodes
+                rules.append(pq.quad_object())
+            self.quad_rules.append(CompositeQuad(*rules))
+
+        # Pull out the nodes for easy access.
+        self.quad_nodes = []
+        for ch in range(self.n_ch):
+            self.quad_nodes.append(self.quad_rules[ch].nodes)
+        self.quad_nodes = array(self.quad_nodes)
+
+    def chan_quad(self, ch, spec, *args):
+        """
+        Return the quadrature of the product of `spec` with the response function
+        for channel `ch` as defined by the DRM.
+
+        `spec` may be either a function evaluating the incident spectrum,
+        or an array of values of the spectrum pre-computed on the quadrature
+        nodes.  If it is a function, it should have the signature
+        g(E, arg1, ...), where the first argument is the incident photon
+        energy, and any optional remaining arguments get set via *args.
+
+        Since the channels share common nodes, it will be most efficient
+        to pass an array of spectrum values, unless only one of the channels
+        is of interest.
+        """
+        if callable(spec):
+            svals = array( [spec(E, *args) for E in self.quad_nodes[ch,:]] )
+        elif len(spec) == self.quad_nodes.shape[1]:
+            svals = spec
+        else:
+            raise ValueError('Argument must be callable or array of values!')
+        return self.quad_rules[ch].quad(svals)

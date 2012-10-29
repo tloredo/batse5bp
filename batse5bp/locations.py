@@ -59,13 +59,13 @@ def ascii64_paths(tnum):
     the COSSC FTP site and locally:  (group, fname, remote).
 
     group       name of the group directory containing the trigger directory
-    fname       name of the ASCII data file, "cat64ms.<tnum>"
+    rfname      name of the remote ASCII data file, "cat64ms.<tnum>"
     remote      tail of the ftp path @ COSSC, "<group>/<fname>"
     """
     # ASCII data is in groups spanning a trigger range of 1000.
     fac = tnum/1000
     u = fac*1000
     group = 'trig%05d' % u
-    fname = 'cat64ms.%05d' % tnum
-    remote = group + '/' + fname  # don't use join; not a local path
-    return group, fname, remote
+    rfname = 'cat64ms.%05d' % tnum
+    remote = group + '/' + rfname  # don't use join; not a local path
+    return group, rfname, remote
