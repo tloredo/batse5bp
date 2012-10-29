@@ -1,7 +1,9 @@
 import nose
+from nose.tools import assert_almost_equal
+
 from numpy import asarray, single, csingle, ones_like
 from numpy.testing import (TestCase, assert_, assert_equal, assert_raises,
-                           assert_array_equal, assert_almost_equal,
+                           assert_array_equal, # assert_almost_equal,
                            run_module_suite)
 
 from batse5bp.prodquad import ProdQuad11, CompositeQuad
@@ -9,14 +11,15 @@ from batse5bp.prodquad import ProdQuad11, CompositeQuad
 
 # Borrowed from NumPy tests:
 
-numpy_assert_almost_equal = assert_almost_equal
+# numpy_assert_almost_equal = assert_almost_equal
 
-def assert_almost_equal(a, b, **kw):
-    if asarray(a).dtype.type in (single, csingle):
-        decimal = 6
-    else:
-        decimal = 12
-    numpy_assert_almost_equal(a, b, decimal=decimal, **kw)
+# def assert_almost_equal(a, b, **kw):
+#     print 'assert:', a, b
+#     if asarray(a).dtype.type in (single, csingle):
+#         decimal = 6
+#     else:
+#         decimal = 12
+#     numpy_assert_almost_equal(a, b, decimal=decimal, **kw)
 
 
 # Function pairs (f,g) with known exact integrals, specified as
@@ -77,6 +80,9 @@ def test_arbnode_cases():
 
 def check_comp_fg_case(cq, g, result):
     q = cq.quad(g)
+    # The next print stmt strangely causes the test to fail.
+    #print 'CQ range:', cq.l, cq.u, [(q.l, q.u) for q in cq.rules]
+    #print q, result
     assert_almost_equal(q, result)
 
 def test_comp_trap_cases():
@@ -89,9 +95,37 @@ def test_comp_trap_cases():
             yield check_comp_fg_case, cq, g, result
 
 
+# TODO:  Test non-ufunc signatures.
+
+
 # This is used only if the script is directly run, e.g., "python prodquad_tests.py".
 if __name__ == "__main__":
-    # run_module_suite()
+    # run_module_suite()  # NumPy's alternative to nose.main()
+
     # nose.main appears not to respect this option; use "nosetests -s".
-    argv = ['--nocapture']  # don't capture print statements--disable stdout capture plugin
-    nose.main(argv=argv)
+    #argv = ['--nocapture']  # don't capture print statements--disable stdout capture plugin
+    #nose.main(argv=argv)
+
+    from numpy import *
+
+    print
+    print '*** Main***'
+
+    a, b = 0, 1
+    pq = ProdQuad11(a, b, a, b, a, b, f_x)
+    print
+
+    g = trap_cases[0]
+    for f, a, b, result in g.cases:
+        m = b / 2.
+        pq1 = ProdQuad11(a, m, a, m, a, m, f)  # product trapezoid rule
+        pq2 = ProdQuad11(m, b, m, b, m, b, f)  # this one without f for init
+        q1, q2 = pq1.quad_object(), pq2.quad_object()
+        cq = CompositeQuad(q1, q2)
+        print f
+        print cq.nodes
+        print 'quads: ', q1.quad(g), q2.quad(g)
+        print 'pquads:', pq1.quad_g(g), pq2.quad_fg(f, g)
+        print cq.quad(g)
+        print
+

@@ -41,7 +41,7 @@ BIT, 11, 139-158 (1971)
 Created 2012-10-25 by Tom Loredo
 """
 
-from numpy import sqrt, empty, array, concatenate
+from numpy import sqrt, empty, array, concatenate, sum, dot
 
 from quad import Quad, CompositeQuad
 
@@ -51,7 +51,92 @@ rrt3 = 1/sqrt(3)  # reciprocal root 3
 rt3_5 = sqrt(3./5)
 
 
-class ProdQuad11(object):
+class ProdQuad1m(object):
+    """
+    Base class for ymmetric interpolatory (1,m) product quadrature rules.
+    """
+ 
+    def __init__(self, a, b, u_0, u_1, m):
+        """
+        Set up an interpolatory product quadrature rule over [a, b] using the
+        specified nodes for the f(x) (u's); subclasses specify g node behavior.
+
+        m is the order for the g(x) dimension; there will be m+1 g nodes.
+        """
+        self.a, self.b = float(a), float(b)
+        self.u_0, self.u_1 = u_0, u_1
+        self.fnodes = array([u_0, u_1], float)
+        self.nf = 2
+        self.ng = m + 1
+
+        self.fvals = None
+
+    def wt_ij(self, u, up):
+        """
+        Calculate an element of the weight matrix.
+        """
+        raise NonImplementedError()
+
+    def set_f(self, f=None, fvals=None, ufunc=True):
+        """
+        Calculate weights summed over tabulated values of f(x).
+        """
+        if fvals is None:
+            if f is None:
+                raise ValueError('Provide one of f or fvals!')
+            if ufunc:
+                self.fvals = f(self.fnodes)
+            else:
+                self.fvals = array( [f(self.fnodes[i]) for i in range(self.nf)] )
+        else:
+            if fvals is None:
+                raise ValueError('Provide one of f or fvals!')
+            self.fvals = fvals
+
+        self.f = f
+        self.gwts = empty(self.ng)
+        for i in range(self.ng):
+            self.gwts[i] = sum(self.fvals*self.fg_wts[:,i])
+
+    def quad_fg(self, f, g, ufunc=(True, True)):
+        """
+        Evaluate the quadrature rule using the functions f() and g().
+        """
+        if ufunc[0]:
+            fvals = f(self.fnodes)
+        else:
+            fvals = array( [f(self.fnodes[i]) for i in range(self.nf)] )
+        if ufunc[1]:
+            gvals = g(self.gnodes)
+        else:
+            gvals = array( [g(self.gnodes[i]) for i in range(self.ng)] )
+        return dot(fvals, dot(self.fg_wts, gvals))
+
+    def quad_g(self, g, ufunc=True):
+        """
+        Evaluate the quadrature rule using the function g(), and previously
+        specified f() values.
+        """
+        if self.fvals is None:
+            raise ValueError('Unspecified f() values!')
+        if ufunc:
+            gvals = g(self.gnodes)
+        else:
+            gvals = array( [g(self.gnodes[i]) for i in range(self.ng)] )
+        return dot(self.gwts, gvals)
+
+    def quad_object(self, f=None, fvals=None, ufunc=True):
+        """
+        Return an object with the Quad interface interface expected by
+        Composite quadtrature objects, using a specified f() (or a set of its
+        values on the fnodes) to define a quadrature rule for g().
+        """
+        if f is not None or fvals is not None:  # otherwise assume prev. set
+            self.set_f(f, fvals, ufunc)
+        return Quad(self.a, self.b, self.gnodes, self.gwts)
+
+
+class ProdQuad11(ProdQuad1m):
     """
     Symmetric interpolatory (1,1) product quadrature rule.
     """
@@ -69,9 +154,7 @@ class ProdQuad11(object):
 
         When f is provided, ufunc indicates whether it is broadcastable.
         """
-        self.a, self.b = a, b
-        self.u_0, self.u_1 = u_0, u_1
-        self.fnodes = array([u_0, u_1], float)
+        ProdQuad1m.__init__(self, a, b, u_0, u_1, 1)  # set up for m=1
         if v_0 is None:
             if v_1 is None:  # use Gauss-Legendre nodes for g()
                 mid = 0.5*(a + b)
@@ -99,9 +182,7 @@ class ProdQuad11(object):
         self.fg_wts[1,0] = self.wt_ij(u_1, u_0, v_0, v_1)
         self.fg_wts[1,1] = self.wt_ij(u_1, u_0, v_1, v_0)
 
-        if f is None and fvals is None:
-            self.fvals = None
-        else:
+        if f is not None or fvals is not None:
             self.set_f(f, fvals, ufunc)
 
     def wt_ij(self, u, up, v, vp):
@@ -110,62 +191,3 @@ class ProdQuad11(object):
         """
         return (self.ba3 - (up+vp)*self.ba2 + up*vp*self.ba) /\
                ((u - up)*(v - vp))
-
-    def set_f(self, f=None, fvals=None, ufunc=True):
-        """
-        Calculate weights summed over tabulated values of f(x).
-        """
-        if fvals is None:
-            if f is None:
-                raise ValueError('Provide one of f or fvals!')
-            if ufunc:
-                self.fvals = f(self.fnodes)
-            else:
-                self.fvals = array( [f(self.fnodes[i]) for i in (1,2)] )
-        else:
-            if fvals is None:
-                raise ValueError('Provide one of f or fvals!')
-            self.fvals = fvals
-
-        self.f = f
-        self.gwts = empty(2)
-        self.gwts[0] = self.fvals[0]*self.fg_wts[0,0] + self.fvals[1]*self.fg_wts[1,0]
-        self.gwts[1] = self.fvals[0]*self.fg_wts[0,1] + self.fvals[1]*self.fg_wts[1,1]
-
-    def quad_fg(self, f, g, ufunc=(True, True)):
-        """
-        Evaluate the quadrature rule using the functions f() and g().
-        """
-        if ufunc[0]:
-            fvals = f(self.fnodes)
-        else:
-            fvals = array( [f(self.fnodes[i]) for i in (1,2)] )
-        if ufunc[1]:
-            gvals = g(self.gnodes)
-        else:
-            gvals = array( [g(self.gnodes[i]) for i in (1,2)] )
-        return fvals[0]*self.fg_wts[0,0]*gvals[0] + fvals[0]*self.fg_wts[0,1]*gvals[1] + \
-               fvals[1]*self.fg_wts[1,0]*gvals[0] + fvals[1]*self.fg_wts[1,1]*gvals[1]
-
-    def quad_g(self, g, ufunc=True):
-        """
-        Evaluate the quadrature rule using the function g(), and previously
-        specified f() values.
-        """
-        if self.fvals is None:
-            raise ValueError('Unspecified f() values!')
-        if ufunc:
-            gvals = g(self.gnodes)
-        else:
-            gvals = array( [g(self.gnodes[i]) for i in (1,2)] )
-        return self.gwts[0,0]*gvals[0] + self.gwts[1]*gvals[1]
-
-    def quad_object(self, f=None, fvals=None, ufunc=True):
-        """
-        Return an object with the Quad interface interface expected by
-        Composite quadtrature objects, using a specified f() (or a set of its
-        values on the fnodes) to define a quadrature rule for g().
-        """
-        if f is not None or fvals is not None:  # otherwise assume prev. set
-            self.set_f(f, fvals, ufunc)
-        return Quad(self.a, self.b, self.gnodes, self.gwts)
