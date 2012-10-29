@@ -6,7 +6,7 @@ from numpy.testing import (TestCase, assert_, assert_equal, assert_raises,
                            assert_array_equal, # assert_almost_equal,
                            run_module_suite)
 
-from batse5bp.prodquad import ProdQuad11, CompositeQuad
+from batse5bp.prodquad import ProdQuad11, ProdQuad12, CompositeQuad
 
 
 # Borrowed from NumPy tests:
@@ -43,12 +43,28 @@ def g_x2(x):
     return x**2
 g_x2.cases = [(f_1, 0, 1, 1/3.), (f_x, 0., 1., .25)]
 
+def g_x3(x):
+    return x**3
+g_x3.cases = [(f_1, 0, 1, .25), (f_x, 0., 1., .2)]
+
+def g_x4(x):
+    return x**4
+g_x4.cases = [(f_1, 0, 1, .2), (f_x, 0., 1., 1./6)]
+
+def g_x5(x):
+    return x**5
+# g_x5.cases = [(f_1, 0, 1, 1./6), (f_x, 0., 1., 1./7)]
+g_x5.cases = [(f_1, 0, 1, 1./6)]
+
 
 # Checker and generators for tests vs. exact results:
 
 def check_fg_case(pq, f, g, result):
     q = pq.quad_fg(f, g)
     assert_almost_equal(q, result)
+
+
+# Generators for (1,1) cases:
 
 trap_cases = [g_x, g_xm1]
 
@@ -58,20 +74,38 @@ def test_trap_cases():
             pq = ProdQuad11(a, b, a, b, a, b)  # product trapezoid rule
             yield check_fg_case, pq, f, g, result
 
-GL_cases = [g_x, g_xm1]
+GL11_cases = [g_x, g_xm1]
 
-def test_GL_cases():
-    for g in GL_cases:
+def test_GL11_cases():
+    for g in GL11_cases:
         for f, a, b, result in g.cases:
             pq = ProdQuad11(a, b, a, b)  # g nodes will be Legendre roots
             yield check_fg_case, pq, f, g, result
 
-arbnode_cases = [g_x, g_xm1]
+arbnode11_cases = [g_x, g_xm1]
 
-def test_arbnode_cases():
-    for g in arbnode_cases:
+def test_arbnode11_cases():
+    for g in arbnode11_cases:
         for f, a, b, result in g.cases:
             pq = ProdQuad11(a, b, 0.2, .6, 0.3, 0.7)  # arbitrary nodes
+            yield check_fg_case, pq, f, g, result
+
+# Generators for (1,2) cases:
+
+GL12_cases = [g_x, g_xm1, g_x2, g_x3, g_x4, g_x5]  # note GL can do x**5
+
+def test_GL12_cases():
+    for g in GL12_cases:
+        for f, a, b, result in g.cases:
+            pq = ProdQuad12(a, b, a, b)  # g nodes will be Legendre roots
+            yield check_fg_case, pq, f, g, result
+
+arbnode12_cases = [g_x, g_xm1, g_x2]
+
+def test_arbnode12_cases():
+    for g in arbnode12_cases:
+        for f, a, b, result in g.cases:
+            pq = ProdQuad12(a, b, 0.2, .9, 0.3, 0.5, 0.8)  # arbitrary nodes
             yield check_fg_case, pq, f, g, result
 
 
@@ -129,3 +163,4 @@ if __name__ == "__main__":
         print cq.quad(g)
         print
 
+    pq2 = ProdQuad12(a, b, a, b, f=f_x)

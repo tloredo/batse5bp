@@ -159,7 +159,6 @@ class CompositeQuad:
         result = 0.
         # Go through the rules, passing the function evaluations.
         for rule, start in zip(self.rules, self.starts):
-            print rule.l, rule.u, start, rule.quad(self.ivals[start:start+rule.npts])
             result += rule.quad(self.ivals[start:start+rule.npts])
         return result
 

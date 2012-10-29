@@ -172,9 +172,6 @@ class ProdQuad11(ProdQuad1m):
         self.ba2 = 0.5*(b**2 - a**2)
         self.ba3 = (b**3 - a**3) / 3.
 
-        self.du = u_1 - u_0
-        self.dv = v_1 - v_0
-
         # Calculate the weight matrix.
         self.fg_wts = empty((2,2))
         self.fg_wts[0,0] = self.wt_ij(u_0, u_1, v_0, v_1)
@@ -193,4 +190,57 @@ class ProdQuad11(ProdQuad1m):
                ((u - up)*(v - vp))
 
 
+class ProdQuad12(ProdQuad1m):
+    """
+    Interpolatory (1,2) product quadrature rule.
+    """
+ 
+    def __init__(self, a, b, u_0, u_1, v_0=None, v_1=None, v_2=None,
+                 f=None, fvals=None, ufunc=True):
+        """
+        Set up an interpolatory product quadrature rule over [a, b] using the
+        specified nodes for the f(x) (u's) and g(x) (v's) factors.
 
+        If the g(x) nodes are unspecified, use Gauss-Legendre nodes.
+
+        If f or fvals is provided (f(x) at the u nodes), use it to build a
+        rule for integrating g(x) specified by itself.
+
+        When f is provided, ufunc indicates whether it is broadcastable.
+        """
+        ProdQuad1m.__init__(self, a, b, u_0, u_1, 2)  # set up for m=1
+        if v_0 is None and v_1 is None and v_2 is None:  # use Gauss-Legendre nodes for g()
+            mid = 0.5*(a + b)
+            offset = 0.5*(b - a)*rt3_5
+            v_0 = mid - offset
+            v_1 = mid
+            v_2 = mid + offset
+        else:
+            self.v_0, self.v_1, self.v_2 = v_0, v_1, v_2
+        self.gnodes = array([v_0, v_1, v_2], float)
+
+        # Constants used in the weight matrix:
+        self.ba = b - a
+        self.ba2 = 0.5*(b**2 - a**2)
+        self.ba3 = (b**3 - a**3) / 3.
+        self.ba4 = (b**4 - a**4) / 4.
+
+        # Calculate the weight matrix.
+        self.fg_wts = empty((2,3))
+        self.fg_wts[0,0] = self.wt_ij(u_0, u_1, v_0, v_1, v_2)
+        self.fg_wts[0,1] = self.wt_ij(u_0, u_1, v_1, v_0, v_2)
+        self.fg_wts[0,2] = self.wt_ij(u_0, u_1, v_2, v_0, v_1)
+        self.fg_wts[1,0] = self.wt_ij(u_1, u_0, v_0, v_1, v_2)
+        self.fg_wts[1,1] = self.wt_ij(u_1, u_0, v_1, v_0, v_2)
+        self.fg_wts[1,2] = self.wt_ij(u_1, u_0, v_2, v_0, v_1)
+
+        if f is not None or fvals is not None:
+            self.set_f(f, fvals, ufunc)
+
+    def wt_ij(self, u, up, v, vp, vpp):
+        """
+        Calculate an element of the weight matrix.
+        """
+        return (self.ba4 - (up+vp+vpp)*self.ba3 \
+                + (up*vp+up*vpp+vp*vpp)*self.ba2 - up*vp*vpp*self.ba) /\
+               ((u - up)*(v - vp)*(v - vpp))
