@@ -1,0 +1,23 @@
+batse5bp
+=========
+
+The batse5bp package provides persistant local access to BATSE GRB data hosted
+at the CGRO SSC.  It accesses both the BATSE GRB catalogs, and a significant
+amount of the detailed GRB data (e.g., time series and spectral data).
+
+The last official BATSE GRB catalog was the 4B catalog.  The "current" catalog
+hosted at the SSC includes many GRBs observed subsequent to the 4B catalog.  A
+5B catalog, including data spanning to the end of the CGRO mission, was
+planned but never completed (in particular, the sky exposure and efficiency
+tables were never computed).  The "5bp" part of the package name denotes "5B,
+preliminary."
+
+The full "5Bp" GRB catalog is fetched, parsed, and stored locally when the
+package is first used.  Detailed GRB data, which is much more voluminous, is
+fetched transparently only when the user first attempts to access it; it is
+cached locally for subsequent access.
+
+Cached data is stored in a local file hierarchy with a structure resembling
+that of the SSC archive.  Files and folders may be deleted within the local
+filesystem when no longer needed; they will be re-fetched as necessary.  There
+is no monolithic database file.
