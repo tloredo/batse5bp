@@ -53,7 +53,7 @@ rt3_5 = sqrt(3./5)
 
 class ProdQuad1m(object):
     """
-    Base class for ymmetric interpolatory (1,m) product quadrature rules.
+    Base class for interpolatory (1,m) product quadrature rules.
     """
  
     def __init__(self, a, b, u_0, u_1, m):
@@ -138,7 +138,7 @@ class ProdQuad1m(object):
 
 class ProdQuad11(ProdQuad1m):
     """
-    Symmetric interpolatory (1,1) product quadrature rule.
+    Interpolatory (1,1) product quadrature rule.
     """
  
     def __init__(self, a, b, u_0, u_1, v_0=None, v_1=None,
@@ -191,3 +191,6 @@ class ProdQuad11(ProdQuad1m):
         """
         return (self.ba3 - (up+vp)*self.ba2 + up*vp*self.ba) /\
                ((u - up)*(v - vp))
+
+
+
