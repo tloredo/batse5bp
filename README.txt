@@ -21,3 +21,18 @@ Cached data is stored in a local file hierarchy with a structure resembling
 that of the SSC archive.  Files and folders may be deleted within the local
 filesystem when no longer needed; they will be re-fetched as necessary.  There
 is no monolithic database file.
+
+Documentation for the module is available online at:
+
+http://inference.astro.cornell.edu/batse/
+
+The documentation is build using the Sphinx documentation generator; the
+Sphinx source is included in the batse5bp repository so the documentation
+may be generated locally if needed.
+
+NASA has supported development of the batse5bp package via its Research
+Opportunities in Space and Earth Sciences (ROSES) programs.  Most of the
+development has been supported by the ROSES Astrophysical Data Analysis Program
+(ADAP) via grant NNX09AD03G.  Development of some of the time series data
+capability has been additionally provided by the ROSES Applied Information
+Systems Research Program (AISRP) via grant NNX09AK60G.
