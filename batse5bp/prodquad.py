@@ -1,5 +1,5 @@
 """ 
-Basic product quadrature algorithms, for integrating the product of a
+Basic inner product quadrature algorithms, for integrating the product of a
 tabulated response function and a signal model.
 
 These implement small symmetric and asymmetric interpolatory product
@@ -33,6 +33,8 @@ zeros of orthogonal polynomials leads to better convergence behavior
 than regularly-spaced nodes.  Such nodes typically produce open rules
 (i.e., with v_0 != a and v_n != b), which simpifies bookkeeping
 at boundaries of compound rules.
+
+The main reference guiding this implementation is:
 
 W. Boland & C. Duris
 Product Type Quadrature Formulas

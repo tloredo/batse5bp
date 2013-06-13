@@ -31,7 +31,8 @@ from prodquad import ProdQuad12, CompositeQuad
 
 
 # This list of the binary table header fields was obtained from a DISCSC DRM
-# file by examining the binary table header __dict__.
+# file by examining the binary table header __dict__.  They are from the
+# _cards attribute of the header.
 hdr_fields = [
     ('TTYPE1', 'DET_NUM', 'the active detector for one row'),
     ('TFORM1', '1I', 'data format of the field: 2-byte INTEGER'),
