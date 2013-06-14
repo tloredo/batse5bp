@@ -125,31 +125,42 @@ class CompositeQuad:
                 rule = Quad(*arg)
                 self.rules.append(rule)
                 last = rule
-        # Make an array of all the distinct nodes.
+        # Make an array of all the distinct nodes and their associated weights,
+        # summing weights of repeated nodes.
         prev = self.rules[0]
-        distinct = [ prev.nodes ]
+        nodes = [ prev.nodes ]
+        wts = [ prev.wts.copy() ]    # copy for when boundary wts change
         self.starts = [0]  # keeps track of starting indices for rules
         self.npts = prev.npts
         for rule in self.rules[1:]:
-            if prev.nodes[-1] != rule.nodes[0]:
-                distinct.append(rule.nodes)
+            if prev.nodes[-1] != rule.nodes[0]:  # no boundary node duplication
+                nodes.append(rule.nodes)
+                wts.append(rule.wts.copy())
                 self.starts.append(self.npts)
                 self.npts += rule.npts
-            else:
-                distinct.append(rule.nodes[1:])
+            else:  # boundary node duplication
+                nodes.append(rule.nodes[1:])
+                wts[-1][-1] += rule.wts[0]
+                wts.append(rule.wts[1:].copy())  # this has to be a copy, too
                 self.starts.append(self.npts-1)
                 self.npts += rule.npts - 1
             prev = rule
-        self.nodes = concatenate(distinct)
+        self.nodes = concatenate(nodes)
+        self.wts = concatenate(wts)
         self.factor = None
         self.factors = None
         self.l = self.rules[0].l
         self.u = self.rules[-1].u
 
-    def quad(self, f):
+    def quad(self, f, call_rules=False):
         """
         Evaluate the quadrature using the callable f or an array of values
         of the integrand at the nodes.
+
+        If call_rules is True, the quadrature is calculated via calls to the
+        component rules.  If False, it is calculated using the collected
+        distinct nodes and accumulated weights.  These should give exactly
+        the same result; the latter (default) approach avoids some overhead.
         """
         if callable(f):
             fvals = f(self.nodes)
@@ -163,8 +174,10 @@ class CompositeQuad:
         else:
             self.ivals = self.fvals
         result = 0.
-        # Go through the rules, passing the function evaluations.
-        for rule, start in zip(self.rules, self.starts):
-            result += rule.quad(self.ivals[start:start+rule.npts])
-        return result
-
+        if call_rules:
+            # Go through the rules, passing the function evaluations.
+            for rule, start in zip(self.rules, self.starts):
+                result += rule.quad(self.ivals[start:start+rule.npts])
+            return result
+        else:
+            return sum(self.wts*fvals)
