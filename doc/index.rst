@@ -28,7 +28,7 @@ series and spectral data).
 The last official BATSE GRB catalog was the 4B catalog.  The "current" catalog
 hosted at the SSC includes many GRBs observed subsequent to the 4B catalog.  A
 5B catalog, including data spanning to the end of the CGRO mission, was
-planned but never completed (in particular, the sky exposure and efficiency
+planned but was never completed (in particular, the sky exposure and efficiency
 tables were never computed).  The "5bp" part of the package name denotes "5B,
 preliminary" (5Bp).
 
@@ -104,9 +104,10 @@ the object in the database for future access.  The return value is the
 object providing access to the data, described below.
 
 By default, the database directory is named "BATSE_5Bp_Data" and is created or
-accessed in the CWD.  To create it elsewhere, or with a different name, or
-to access a previously loaded database stored elsewhere, provide
-the database directory path as an argument to ``load_catalog()``.
+accessed in the current working directory (CWD).  To create it elsewhere, or
+with a different name, or to access a previously loaded database stored
+elsewhere, provide the database directory path as an argument to
+``load_catalog()``.
 
 The GRBCollection object
 ------------------------
@@ -127,7 +128,7 @@ For convenience, besides the standard ``dict`` keyword
 access, you can access GRB data via *attributes*, in two ways:
 
 * ``grbcat.tN`` returns the GRB instance for trigger number *N*, e.g.,
-  ``grbcat.105`` returns the instance for trigger 105.
+  ``grbcat.t105`` returns the instance for trigger 105.
 
 * ``grbcat.bYYMMDD`` returns a **list** of GRB instances for bursts
   that occured on the specified date, in the YYMMDD format that is
@@ -151,7 +152,7 @@ So all three of the following ``GRB`` instances are the same::
 The GRB object: Catalog data
 ----------------------------
 
-You will access the data and metadata for a GRB via the attributes
+You can access the data and metadata for a GRB via the attributes
 and methods of its ``GRB`` instance.
 
 Suppose you load the catalog in an interactive IPython session, and
@@ -301,19 +302,19 @@ the archived light curves often show only a subset of the data.
 Compiled 64 ms count data (ASCII64)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The BATSE team has compiled three different DISC data types into a four-
-channel "64 |nbsp| ms" binned counts data set for each burst, stored as an
-ASCII file.  These data are summed count *rates* (float-valued) from the subset
-of BATSE's eight detectors triggered by a burst.  Two of the data types
-contain genuine 64 |nbsp| ms data associated with a trigger: the PREB (pre-
-burst) and DISCSC (discriminator science) data.  To extend coverage further,
-both before and after the time covered by PREB and DISCSC, the BATSE team used
-the continuously-recorded 256 |nbsp| ms DISCLA data to estimate 64 |nbsp| ms
-count rates prior to the PREB and after the DISCSC data.  The early ASCII data
-thus has contiguous sets of 16 bins with identical count rates. Since the
-trigger need not be at the boundary of a 256 |nbsp| ms DISCLA interval, there
-is often a single set of fewer than 16 ASCII bins with identical rates, just
-before the PREB data.
+The BATSE team has compiled three different DISC data types into a four- channel
+"64 |nbsp| ms" binned counts data set for each burst, stored as an ASCII file.
+These data are summed count *rates* (float-valued counts-per-second) from the
+subset of BATSE's eight detectors that were triggered by a burst.  Two of the
+data types contain genuine 64 |nbsp| ms data associated with a trigger: the PREB
+(PRE-Burst) and DISCSC (DISCriminator SCience) data.  To extend coverage
+further, both before and after the time covered by PREB and DISCSC, the BATSE
+team used the continuously-recorded 256 |nbsp| ms DISCLA (DISCriminator Large
+Area) data to estimate 64 |nbsp| ms count rates prior to the PREB and after the
+DISCSC data.  The early ASCII data thus has contiguous sets of 16 bins with
+identical count rates. Since the trigger need not be at the boundary of a 256
+|nbsp| ms DISCLA interval, there is often a single set of fewer than 16 ASCII
+bins with identical rates, just before the PREB data.
 
 A detailed description of the ASCII 64 |nbsp| ms data, copied from the SSC,
 is available as a string in the ``ascii64`` module:  ``ascii64.docn``.
@@ -324,17 +325,17 @@ numbered from 0 to 3.*
 
 ``GRB`` instances have an ``ascii64`` attribute that provides access to the
 ASCII 64 |nbsp| ms data via an ``ASCII64`` object with several attributes and
-one method providing different views of the data.  The aim of this object is
-to report integer-valued *counts* (not rates), in the actual 64 and 256 |nbsp|
-ms bins used for measurements, by re-binning the subdivided DISCLA data,
-and converting the rate estimates back to counts.
-Presently this is only correctly done for the early DISCLA data.  Fortunately,
-most bursts are short enough that late-time DISCLA data will typically be
-ignored.  But for long bursts, the user should use this ASCII data with caution,
-finding a way to handle the late-time subdivided DISCLA data.  For the early
-mission, the DISCSC data duration is about 4 |nbsp| m; later in the mission
-the flight software was reconfigured to provide ~10 |nbsp| m of DISCSC data.
-The late-time DISCLA bins appear after these intervals.
+one method providing different views of the data.  The aim of this object is to
+report integer-valued *counts* (not rates), in the actual 64 and 256 |nbsp| ms
+bins used for measurements, by re-binning the subdivided DISCLA data, and
+converting the rate estimates back to counts. Presently this is only correctly
+done for the early (pre-PREB) DISCLA data.  Fortunately, most bursts are short
+enough that late-time (post-DISCSC) DISCLA data will typically be ignored.  But
+for long bursts, the user should use this ASCII data with caution, finding a way
+to handle the late-time subdivided DISCLA data.  For the early mission, the
+DISCSC data duration is ~4 |nbsp| m; later in the mission the flight
+software was reconfigured to provide ~10 |nbsp| m of DISCSC data. The late-time
+DISCLA bins appear after these intervals.
 
 For the attribute descriptions below:
 
@@ -409,10 +410,11 @@ of the triggered detectors.
 
 Users should note that the archived DRMs are fairly coarsely sampled.  Also, the
 response for DISC channel 4 is relatively flat over the tabulated range and is
-simply truncated at the high-energy end of the range (about 2 GeV).  Integrals
-of the product of an incident flux model and the channel response will be
-inaccurate if the incident flux does not fall with energy at least as quickly as
-1/E**2.
+simply truncated at the high-energy end of the range (about 20 |nbsp| MeV;
+in fact, the response is typically *rising* slowly with energy above a few MeV).
+Integrals of the product of an incident flux model and the channel response will
+be inaccurate if the incident flux does not fall with energy at least as quickly
+as 1/E**2 above ~1 |nbsp| MeV.
 
 ``discsc_drms.n_det`` is the number of triggered detectors.  
 
@@ -463,9 +465,9 @@ triggered detector.
     non-zero.
 
 
-The *summed* response of the triggered detectors is available via
-similar attributes of ``discsc_drms`` itself:
-``ch_bins``, ``E_bins``, ``drm``, ``crv``, and ``start``.
+The summed response of the triggered detectors (the *detector-summed* response)
+is available via similar attributes of ``discsc_drms`` itself: ``ch_bins``,
+``E_bins``, ``drm``, ``crv``, and ``start``.
 
 The following block of code plots the summed response for all four DISC
 channels in a single figure.  Note that ``E_vals`` is set equal to the
@@ -484,33 +486,39 @@ incident energy bin centers.
         xlabel(r'$E$ (keV)')
         ylabel(r'$R_i(E)$ (cm$^2$)')
 
-The ``DRMs_DISCSC`` provides a capability to numerically integrate the product
+``DRMs_DISCSC`` provides methods for numerical integrattion of the product
 of an incident spectrum model and the response function for each channel; the
 result is the expected number of detected photons ("counts") in the channel.
-The calculation is done using an interpolatory inner product quadrature rule
-that uses evaluations of the response function and the spectrum at *different*
-points, to account for different availability and scales of variation of the
-factors.  Currently, only one rule is available:  For each incident energy
+This quadrature capability is provided only for the *detector-summed* response.
+
+The quadrature is done using an interpolatory inner product quadrature rule that
+uses evaluations of the response function and the spectrum at *different*
+points, to account for different availability and scales of variation of these
+two factors.  Currently, only one rule is available:  For each incident energy
 interval in a channel response vector, the rule uses the two response values at
-the interval boundaries, and three spectrum values within the interval (located
-at the zeroes of a 2nd-degree Legendre polynomial over the interval).
+the interval boundaries, and three spectrum values within the interval, located
+at the zeroes of a 2nd-degree Legendre polynomial over the interval.  This
+corresponds to linear interpolation of the response function, and 5th-degree
+polynomial interpolation of the spectrum, over each DRM incident energy
+interval.
 
-Current quadrature support is only for the *summed* response.
+Note that the DRMs for all channels share common incident energy bins, so
+the quadrature rules for all channels share common incident energy nodes.
 
-To set up the rules for the summed response channels for a burst's DISC data,
-call the ``set_sum_prodquad`` method of the burst's ``DRMs_DISCSC`` object.
-This defines a product quadrature rule for each channel; it also compiles
-the nodes (incident energy values used in the rules) and makes them
-available as an array via the ``quad_nodes`` attribute, so
-``quad_nodes[i,j]`` returns the ``j'th`` energy value for channel ``i``.
-The ``chan_quad(i, spec)`` method calculates the quadrature for channel
-``i`` for input spectrum ``spec``.  The spectrum can be provided as a
-function (of incident photon energy), or as a vector of values pre-calculated
-on the nodes (this will be faster if results are sought for more than one
-channel).  If a spectrum function is used that requires arguments besides
-the photon energy, those arguments can be provided to ``chan_quad`` as
-additional arguments; e.g., for a spectrum with parameters ``p1`` and
-``p2``, the signature would be: ``chan_quad(i, spec, p1, p2)``.
+To set up the rules for every channel of the detector-summed response for a
+burst's DISC data, call the ``set_sum_prodquad`` method of the burst's
+``DRMs_DISCSC`` object. This defines a product quadrature rule for each channel;
+it also compiles the nodes (incident energy values used in the rules) and makes
+them available as an array via the ``quad_nodes`` attribute, so
+``quad_nodes[i,j]`` returns the ``j'th`` energy value for channel ``i``. The
+``chan_quad(i, spec)`` method calculates the quadrature for channel ``i`` for
+input spectrum ``spec``. The spectrum can be provided as a function (of incident
+photon energy), or as a vector of values pre-calculated on the nodes (this will
+be faster if results are sought for more than one channel).  If a spectrum
+function is used that requires arguments besides the photon energy, those
+arguments can be provided to ``chan_quad`` as additional arguments; e.g., for a
+spectrum with parameters ``p1`` and ``p2``, the signature would be:
+``chan_quad(i, spec, p1, p2)``.
 
 The following block of code pre-calculates spectrum values and calculates
 the expected number of counts for BATSE channels 1 and 2 (indices 0 and 1).
