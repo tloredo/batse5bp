@@ -1,8 +1,20 @@
 #!/usr/bin/env python
 
-# To install the package to a directory other than site-packages, use:
+# To build a source distribution as a gzip'ed tar file:
 #
-#     python setup.py install --install-platlib <path>
+#    python setup.py sdist
+#
+# To install the package to site-packages (or its virtual counterpart):
+#
+#    pip install <source-dist.tar.gz>
+#
+# This enables quick removal via "pip uninstall <package-name<".
+#
+# To install the package (including Python modules and extensions)
+# to a directory other than site-packages, use this within the unpacked
+# source package:
+#
+#     python setup.py install --install-lib <path>
 
 def configuration(parent_package='',top_path=''):
     from numpy.distutils.misc_util import Configuration

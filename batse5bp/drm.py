@@ -186,10 +186,18 @@ class DRMs_DISCSC:
         # Get energy node info for sum DRM from one of the detectors.
         # Discriminator bin boundaries (nominal energy loss units), n_ch+1 vals:
         self.ch_bins = self.detectors[0].ch_bins
+
         # Incident photon energy "edges;" there should be n_E of these but
         # they are treated as if binned somehow....
-        # TODO:  Verify the same values are used for all detectors.
         self.E_bins = self.detectors[0].E_bins
+
+        # Do a quick check of consistency between detectors.
+        # TODO:  Verify more thoroughly?
+        # TODO:  Do this only when reading the FITS file.
+        for n, detector in enumerate(self.detectors[1:]):
+            for i in [0,1]:  # just check 1st 2 bins
+                if detector.E_bins[i] != self.E_bins[i]:
+                    raise ValueError('E_bins mismatch between detectors for (det, bin) = (%i, %i)!' % (n,i))
 
     def load_from_fits(self, fits_path, drm_path, meta_path):
         """

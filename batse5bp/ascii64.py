@@ -225,6 +225,8 @@ class ASCII64:
         Return time bin centers & widths (vectors) & count rates (4-row matrix).
         These values are useful for plotting.
         """
+        # TODO:  Add options to report root-cts or bin-wise HPD region error
+        # estimates.
         centers = 0.5*(self.times[:-1] + self.times[1:])
         widths = self.times[1:] - self.times[:-1]
         rates = self.counts / widths

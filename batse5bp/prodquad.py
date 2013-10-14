@@ -55,13 +55,14 @@ rt3_5 = sqrt(3./5)
 
 class ProdQuad1m(object):
     """
-    Base class for interpolatory (1,m) product quadrature rules.
+    Base class for interpolatory (1,m) product quadrature rules that calculate
+    the integral of the product of two functions, f(x)*g(x).
     """
  
     def __init__(self, a, b, u_0, u_1, m):
         """
         Set up an interpolatory product quadrature rule over [a, b] using the
-        specified nodes for the f(x) (u's); subclasses specify g node behavior.
+        specified nodes (u's) for f(x); subclasses specify g node behavior.
 
         m is the order for the g(x) dimension; there will be m+1 g nodes.
         """
