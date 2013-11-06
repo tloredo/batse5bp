@@ -43,9 +43,11 @@ BIT, 11, 139-158 (1971)
 Created 2012-10-25 by Tom Loredo
 """
 
-from numpy import sqrt, empty, array, concatenate, sum, dot
+from numpy import sqrt, empty, ones_like, array, concatenate, arange
+from numpy import sum, dot, prod, delete
 
 from quad import Quad, CompositeQuad
+from poly import roots2coefs, indef2def
 
 
 # Constants for Gauss-Legendre nodes:
@@ -247,3 +249,208 @@ class ProdQuad12(ProdQuad1m):
         return (self.ba4 - (up+vp+vpp)*self.ba3 \
                 + (up*vp+up*vpp+vp*vpp)*self.ba2 - up*vp*vpp*self.ba) /\
                ((u - up)*(v - vp)*(v - vpp))
+
+
+class ProdQuadRule(object):
+    """
+    An implementation of an interpolatory inner product quadrature rule for
+    computing the integral of the product of two functions, f(x)*g(x),
+    with support for alteration of the integration bounds for the rule without
+    computing an entirely new rule from scratch.
+
+    This implementation presumes the rule will be used to compute several
+    quadratures (e.g., for different choices of f or g, or different intervals),
+    and thus opts for simplicity over efficiency in initializing the rule.
+    """
+
+    # TODO:  Symmetric rules (with the same f and g nodes) can be computed
+    # more quickly.  Support this, perhaps with a separate class?
+
+    def __init__(self, f_nodes, g_nodes, a=None, b=None, f=None):
+        """
+        Define an interpolatory inner product quadrature rule for calculating
+        the integral of the product of two functions, f(x)*g(x), over an
+        interval [a,b].  The rule uses values of f() and g() at different
+        sets of nodes.  Information is cached to enable defining new rules
+        using the same f() nodes but different integration limits (and 
+        different g() nodes).
+
+        If limits are specified, a complete rule is constructed; in this
+        case, methods are available for computing the quadrature.
+
+        If `f` is provided, it is used as the first factor, f(x), defining an
+        accelerated rule for quadrature when g() alone is subsequently 
+        specified.  `f` may be either the (callable) function f(x), or a
+        vector of values of f() evaluated over f_nodes.  It is used only if
+        [a,b] is specified.  f() may also be set later via the set_f() method.
+        """
+        # The # of nodes minus 1 is the degree of the Lagrange polynomial used
+        # for interpolation.  Typically this is the degree (separate for f & g)
+        # for which quadrature of polynomials is exact.  If the nodes are
+        # Gaussian quadrature nodes, the result will be exact for polynomials of
+        # higher degree (with appropriate weight function).
+        self.n_f = len(f_nodes)
+        self.f_deg = self.n_f - 1
+        self.n_g = len(g_nodes)
+        self.g_deg = self.n_g - 1
+        self.f_nodes = array(f_nodes, dtype=float)
+        self.g_nodes = array(g_nodes, dtype=float)
+        if a is None or b is None:
+            if a is not None or b is not None:
+                raise ValueError('Must specify *both* a and b!')
+            self.a, self.b = None, None
+            bounded = False
+            self.fvals = None
+        else:
+            self.a, self.b = a, b
+            bounded = True
+            if f:
+                if callable(f):
+                    self.fvals = f(f_nodes)
+                else:
+                    self.fvals = f.copy()
+            else:
+                self.fvals = None
+
+        # The rule is specified by a (n_f+1)x(n_g+1) matrix of weights.
+        # The denominators do not depend on [a,b] and so are cached for
+        # use when [a,b] is changed.
+        self.fg_wts = empty((self.n_f,self.n_g), dtype=float)
+        self.f_denom = ones_like(self.f_nodes)
+        for i in xrange(self.n_f):
+            self.f_denom[i] = prod(self.f_nodes[i] - delete(self.f_nodes, i))
+            # fd = 1
+            # for k in xrange(self.n_f):
+            #     if k != i:
+            #         fd *= (self.f_nodes[i] - self.f_nodes[k])
+        self.g_denom = ones_like(self.g_nodes)
+        for j in xrange(self.n_g):
+            self.g_denom[j] = prod(self.g_nodes[j] - delete(self.g_nodes, j))
+
+        # The weights are integrals of products of the Lagrange basis
+        # polynomials over [a,b].  Store arrays defining the indefinite
+        # integrals (via polynomial coefficients) so weights for new [a,b] can
+        # be quickly calculated.
+        # Each indefinite integral is a f_deg*g_deg+1 degree polynomial without
+        # a constant term, thus with f_deg+g_deg+1 coefficients.
+        n_c = self.f_deg+self.g_deg+1
+        self.indefs = empty((self.n_f, self.n_g, n_c), dtype=float)
+
+        # powers will hold divisors converting polynomial coefs to indefinite
+        # integral coefs, i.e., the powers of the integrated monomial terms.
+        powers = arange(1, n_c+1, dtype=float)
+        f_roots = empty(self.f_deg)
+        g_roots = empty(self.g_deg)
+        roots = empty(self.f_deg+self.g_deg)
+        j0 = self.n_f - 1  # index for the first g_roots entry in roots
+        # print
+        # print self.n_f, self.n_g
+        for i in xrange(self.n_f):
+            if i>0:
+                roots[0:i] = self.f_nodes[0:i]
+            if i<self.n_f-1:
+                # Start at i since we're skipping entry i.
+                roots[i:j0] = self.f_nodes[i+1:]
+            for j in xrange(self.n_g):
+                if j>0:
+                    roots[j0:j0+j] = self.g_nodes[0:j]
+                if j<self.n_g-1:
+                    # Start at j0+j since we're skipping entry j.
+                    roots[j0+j:] = self.g_nodes[j+1:]
+                # print i, j, roots
+                coefs = roots2coefs(roots)
+                self.indefs[i,j,:] = coefs/powers
+
+        if bounded:
+            self.set_wts(a, b)
+
+        # *** This duplicates some initialization done above.
+        if self.fvals is not None:
+            self.set_f(fvals=self.fvals)
+
+    def set_wts(self, a, b):
+        """
+        Using the integration range [a,b], calculate the quadrature weight
+        matrix.
+        """
+        for i in xrange(self.n_f):
+            for j in xrange(self.n_g):
+                # TODO:  This may be wasteful, repeatedly calculating powers of
+                # a and b.
+                self.fg_wts[i,j] = indef2def(self.indefs[i,j,:], a, b) / \
+                                (self.f_denom[i]*self.g_denom[j])
+
+    def get_fg_wts(self, a, b):
+        """
+        Using the integration range [a,b], calculate the quadrature weight
+        matrix and return it.  This does not change the value of any
+        previously-set weight matrix stored in the instance, and thus has
+        no effect on future calls of the quad_fg() and quad_g() methods.
+        """
+        fg_wts = empty((self.n_f,self.n_g), dtype=float)
+        for i in xrange(self.n_f):
+            for j in xrange(self.n_g):
+                # TODO:  This may be wasteful, repeatedly calculating powers of
+                # a and b.
+                fg_wts[i,j] = indef2def(self.indefs[i,j,:], a, b) / \
+                              (self.f_denom[i]*self.g_denom[j])
+        return fg_wts
+
+    def set_f(self, f=None, fvals=None, ufunc=True):
+        """
+        Setup a weight matrix using tabulated values of f(x), for subsequent
+        use for quadratures with specified g(x) functions.
+        """
+        if fvals is None:
+            if f is None:
+                raise ValueError('Provide one of f or fvals!')
+            if ufunc:
+                self.fvals = f(self.f_nodes)
+            else:
+                self.fvals = array( [f(self.f_nodes[i]) for i in range(self.n_f)] )
+        else:
+            if fvals is None:
+                raise ValueError('Provide one of f or fvals!')
+            self.fvals = fvals
+
+        self.f = f
+        self.g_wts = empty(self.n_g)
+        for j in range(self.n_g):
+            self.g_wts[j] = sum(self.fvals*self.fg_wts[:,j])
+
+    def quad_fg(self, f, g, ufunc=(True, True)):
+        """
+        Evaluate the quadrature rule using the functions f() and g().
+        """
+        if ufunc[0]:
+            fvals = f(self.f_nodes)
+        else:
+            fvals = array( [f(self.f_nodes[i]) for i in range(self.n_f)] )
+        if ufunc[1]:
+            gvals = g(self.g_nodes)
+        else:
+            gvals = array( [g(self.g_nodes[j]) for j in range(self.n_g)] )
+        return dot(fvals, dot(self.fg_wts, gvals))
+
+    def quad_g(self, g, ufunc=True):
+        """
+        Evaluate the quadrature rule using the function g(), and previously
+        specified f() values.
+        """
+        if self.fvals is None:
+            raise ValueError('Unspecified f() values!')
+        if ufunc:
+            gvals = g(self.g_nodes)
+        else:
+            gvals = array( [g(self.g_nodes[j]) for j in range(self.n_g)] )
+        return dot(self.gwts, gvals)
+
+    def quad_object(self, f=None, fvals=None, ufunc=True):
+        """
+        Return an object with the Quad interface interface expected by
+        Composite quadtrature objects, using a specified f() (or a set of its
+        values on the fnodes) to define a quadrature rule for g().
+        """
+        if f is not None or fvals is not None:  # otherwise assume prev. set
+            self.set_f(f, fvals, ufunc)
+        return Quad(self.a, self.b, self.g_nodes, self.g_wts)

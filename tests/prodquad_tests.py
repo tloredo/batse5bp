@@ -1,12 +1,13 @@
 import nose
 from nose.tools import assert_almost_equal
 
-from numpy import asarray, single, csingle, ones_like
+from numpy import asarray, single, csingle, ones_like, sqrt
 from numpy.testing import (TestCase, assert_, assert_equal, assert_raises,
                            assert_array_equal, # assert_almost_equal,
                            run_module_suite)
 
-from batse5bp.prodquad import ProdQuad11, ProdQuad12, CompositeQuad
+from batse5bp.prodquad import ProdQuad11, ProdQuad12, ProdQuadRule
+from batse5bp.prodquad import CompositeQuad
 
 
 # Borrowed from NumPy tests:
@@ -63,8 +64,22 @@ def check_fg_case(pq, f, g, result):
     q = pq.quad_fg(f, g)
     assert_almost_equal(q, result)
 
+# Test composite rules via 2-element cases built from the hard-wired single-rule
+# cases by cutting [a,b] in two.
 
-# Generators for (1,1) cases:
+def check_comp_fg_case(cq, g, result):
+    q = cq.quad(g)
+    # The next print stmt strangely causes the test to fail.
+    #print 'CQ range:', cq.l, cq.u, [(q.l, q.u) for q in cq.rules]
+    #print q, result
+    assert_almost_equal(q, result)
+
+
+#===============================================================================
+# Test hard-wired rules.
+
+#-------------------------------------------------------------------------------
+# Generators for hard-wired (1,1) cases:
 
 trap_cases = [g_x, g_xm1]
 
@@ -90,7 +105,8 @@ def test_arbnode11_cases():
             pq = ProdQuad11(a, b, 0.2, .6, 0.3, 0.7)  # arbitrary nodes
             yield check_fg_case, pq, f, g, result
 
-# Generators for (1,2) cases:
+#-------------------------------------------------------------------------------
+# Generators for hard-wired (1,2) cases:
 
 GL12_cases = [g_x, g_xm1, g_x2, g_x3, g_x4, g_x5]  # note GL can do x**5
 
@@ -109,16 +125,7 @@ def test_arbnode12_cases():
             yield check_fg_case, pq, f, g, result
 
 
-# Test composite rules via 2-element cases built from the single-rule cases
-# by cutting [a,b] in two.
-
-def check_comp_fg_case(cq, g, result):
-    q = cq.quad(g)
-    # The next print stmt strangely causes the test to fail.
-    #print 'CQ range:', cq.l, cq.u, [(q.l, q.u) for q in cq.rules]
-    #print q, result
-    assert_almost_equal(q, result)
-
+#-------------------------------------------------------------------------------
 # Composite (1,1) tests:
 
 def test_comp_trap_cases():
@@ -143,7 +150,82 @@ def test_comp12_trap_cases():
             cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
             yield check_comp_fg_case, cq, g, result
 
+#===============================================================================
+# Test ProdQuadRule (i.e., non-hard-wired rules).
 
+# Generators for (1,1) cases:
+
+def test_pqr_trap_cases():
+    for g in trap_cases:
+        for f, a, b, result in g.cases:
+            pq = ProdQuadRule([a, b], [a, b], a, b)  # product trapezoid rule
+            yield check_fg_case, pq, f, g, result
+
+def test_pqr_GL11_cases():
+    for g in GL11_cases:
+        for f, a, b, result in g.cases:
+            # use Gauss-Legendre nodes for g()
+            mid = 0.5*(a + b)
+            offset = 0.5*(b - a)/sqrt(3)
+            v_0 = mid - offset
+            v_1 = mid + offset
+
+            pq = ProdQuadRule([a, b], [v_0, v_1], a, b)  # g nodes will be Legendre roots
+            yield check_fg_case, pq, f, g, result
+
+def test_pqr_arbnode11_cases():
+    for g in arbnode11_cases:
+        for f, a, b, result in g.cases:
+            pq = ProdQuadRule([0.2, .6], [0.3, 0.7], a, b)  # arbitrary nodes
+            yield check_fg_case, pq, f, g, result
+
+
+# Generators for (1,2) cases:
+
+def test_pqr_GL12_cases():
+    for g in GL12_cases:
+        for f, a, b, result in g.cases:
+            # use Gauss-Legendre nodes for g()
+            mid = 0.5*(a + b)
+            offset = 0.5*(b - a)*sqrt(3./5)
+            v_0 = mid - offset
+            v_1 = mid
+            v_2 = mid + offset
+
+            pq = ProdQuadRule([a, b], [v_0, v_1, v_2], a, b)  # g nodes will be Legendre roots
+            yield check_fg_case, pq, f, g, result
+
+def test_pqr_arbnode12_cases():
+    for g in arbnode12_cases:
+        for f, a, b, result in g.cases:
+            pq = ProdQuadRule([0.2, .9], [0.3, 0.5, 0.8], a, b)  # arbitrary nodes
+            yield check_fg_case, pq, f, g, result
+
+
+# Composite (1,1) tests:
+
+def test_pqr_comp_trap_cases():
+    for g in trap_cases:
+        for f, a, b, result in g.cases:
+            m = b / 3.
+            pq1 = ProdQuadRule([a, m], [a, m], a, m, f)  # product trapezoid rule
+            pq2 = ProdQuadRule([m, b], [m, b], m, b)  # this one without f for init
+            cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
+            yield check_comp_fg_case, cq, g, result
+
+# Composite (1,2) tests:
+
+def test_pqr_comp12_trap_cases():
+    for g in comp12_trap_cases:
+        for f, a, b, result in g.cases:
+            m = b / 3.
+            pq1 = ProdQuadRule([a, m], [a, m/2, m], a, m, f)  # product trapezoid rule
+            pq2 = ProdQuadRule([m, b], [m, m+.3, b], m, b)  # this one without f for init
+            cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
+            yield check_comp_fg_case, cq, g, result
+
+
+#===============================================================================
 
 # TODO:  Test non-ufunc signatures.
 
