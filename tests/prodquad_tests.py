@@ -58,6 +58,28 @@ def g_x5(x):
 g_x5.cases = [(f_1, 0, 1, 1./6)]
 
 
+# TODO:  This class was introduced for the later tests; should convert
+# earlier tests to this format.
+
+class ProdQuadFuncs:
+    
+    def __init__(self, f, g, indef):
+        """
+        Bundle together f() and g() functions for an inner product quadrature
+        test case, along with the indefinite integral of f*g.
+        """
+        self.f = f
+        self.g = g
+        self.indef = indef
+
+
+# For x * x cases:
+fg_1_1 = ProdQuadFuncs(lambda x: x, lambda x: x, lambda x: x**3/3.)
+
+# For x * x**2 cases:
+fg_1_2 = ProdQuadFuncs(lambda x: x, lambda x: x*x, lambda x: x**4/4.)
+
+
 # Checker and generators for tests vs. exact results:
 
 def check_fg_case(pq, f, g, result):
@@ -69,9 +91,8 @@ def check_fg_case(pq, f, g, result):
 
 def check_comp_fg_case(cq, g, result):
     q = cq.quad(g)
-    # The next print stmt strangely causes the test to fail.
-    #print 'CQ range:', cq.l, cq.u, [(q.l, q.u) for q in cq.rules]
-    #print q, result
+    # print 'CQ range:', cq.l, cq.u, [(r.l, r.u) for r in cq.rules]
+    # print q, result
     assert_almost_equal(q, result)
 
 
@@ -153,6 +174,7 @@ def test_comp12_trap_cases():
 #===============================================================================
 # Test ProdQuadRule (i.e., non-hard-wired rules).
 
+#-------------------------------------------------------------------------------
 # Generators for (1,1) cases:
 
 def test_pqr_trap_cases():
@@ -180,6 +202,7 @@ def test_pqr_arbnode11_cases():
             yield check_fg_case, pq, f, g, result
 
 
+#-------------------------------------------------------------------------------
 # Generators for (1,2) cases:
 
 def test_pqr_GL12_cases():
@@ -202,6 +225,7 @@ def test_pqr_arbnode12_cases():
             yield check_fg_case, pq, f, g, result
 
 
+#-------------------------------------------------------------------------------
 # Composite (1,1) tests:
 
 def test_pqr_comp_trap_cases():
@@ -223,6 +247,117 @@ def test_pqr_comp12_trap_cases():
             pq2 = ProdQuadRule([m, b], [m, m+.3, b], m, b)  # this one without f for init
             cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f))
             yield check_comp_fg_case, cq, g, result
+
+
+#-------------------------------------------------------------------------------
+# Tests integrating over part of the composite range:
+
+
+
+#-------------------------------------------------------------------------------
+# Cases and checker for testing changing the integration range.
+
+def check_g_range_case(pq, g, a, b, result):
+    q = pq.quad_g_range(g, a, b)
+    assert_almost_equal(q, result)
+
+x_x_case = [fg_1_1,        # functions
+             (0., 1.),     # initial range
+             [(0.5, None),  # modified ranges...
+             (None, 0.6),
+             (0.5, 0.6)]]
+
+range_cases = [x_x_case]
+
+# Generator for (1,2) cases:
+
+def test_pqr_range_cases():
+    for funcs, c0, cases in range_cases:
+        f, g, indef = funcs.f, funcs.g, funcs.indef
+        a0, b0 = c0
+        result = indef(b0) - indef(a0)
+
+        # use Gauss-Legendre nodes for g()
+        mid = 0.5*(a0 + b0)
+        offset = 0.5*(b0 - a0)*sqrt(3./5)
+        v_0 = mid - offset
+        v_1 = mid
+        v_2 = mid + offset
+
+        pq = ProdQuadRule([a0, b0], [v_0, v_1, v_2], a0, b0)  # g nodes will be Legendre roots
+        pq.set_f(f)
+
+        # Check the initial range result.
+        q = pq.quad_fg(f, g)
+        assert_almost_equal(q, result)
+
+        for c in cases:
+            a, b = c
+            if a is None:
+                a = a0
+            if b is None:
+                b = b0
+            result = indef(b) - indef(a)
+            yield check_g_range_case, pq, g, a, b, result
+
+
+#-------------------------------------------------------------------------------
+# Cases and checker for testing changing the integration range in composites.
+
+def check_comp_range_case(cq, g, a, b, result):
+    print 'case:', g(2), a, b
+    q = cq.quad_range(g, a, b)
+    assert_almost_equal(q, result)
+
+x_x_case = [fg_1_1,        # functions
+             (0., 1.),     # initial range
+             [(0., 1.),    # duplicate full range
+             (0.5, None),  # middle to end
+             (None, 0.6),  # start to middle
+             (None, 0.3),  # all in 1st rule
+             (.9, None),   # all in last rule
+             (0.5, 0.6)]]  # all in middle rule; no full rules
+
+range_cases = [x_x_case]
+
+def test_comp_range_cases():
+    for funcs, c0, cases in range_cases:
+        f, g, indef = funcs.f, funcs.g, funcs.indef
+        a0, b0 = c0
+        result = indef(b0) - indef(a0)
+
+        # use Gauss-Legendre nodes for g()
+        mid = 0.5*(a0 + b0)
+        offset = 0.5*(b0 - a0)*sqrt(3./5)
+        v_0 = mid - offset
+        v_1 = mid
+        v_2 = mid + offset
+
+        # Build 3 rules spanning the full range, open-closed-closed along g.
+        m1 = a0 + (b0-a0)/3.
+        m2 = a0 + 2*(b0-a0)/3.
+        w1 = m1 - a0
+        w2 = m2 - m1
+        w3 = b0 - m2
+
+
+        pq1 = ProdQuadRule([a0, m1], [a0+.2*w1, m1+.5*w1, m1-.1*w1], a0, m1, f)  # product trapezoid rule
+        pq2 = ProdQuadRule([m1, m2], [m1, m1+.3*w2, m2], m1, m2)  # this one without f for init
+        pq3 = ProdQuadRule([m2, b0], [m2, m2+.5*w2, b0], m2, b0)  # this one without f for init
+        cq = CompositeQuad(pq1.quad_object(), pq2.quad_object(f), pq3.quad_object(f))
+
+        # Check the initial range result.
+        q = cq.quad(g)
+        assert_almost_equal(q, result)
+
+        for c in cases:
+            a, b = c
+            if a is None:
+                a = a0
+            if b is None:
+                b = b0
+            result = indef(b) - indef(a)
+            yield check_comp_range_case, cq, g, a, b, result
 
 
 #===============================================================================

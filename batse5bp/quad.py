@@ -4,7 +4,7 @@ Generic basic and composite quadrature rule objects.
 Created 2012-10-28 by Tom Loredo; stolen from the Inference package
 """
 
-from numpy import concatenate
+from numpy import array, concatenate, searchsorted
 
 
 class Quad:
@@ -78,6 +78,9 @@ class CompositeQuad:
     def isquad(obj):
         """
         Return True if obj has a Quad interface.
+
+        Note that this does not check for a quad_range method; this will
+        not be needed by some CompositeQuad instances.
         """
         if isinstance(obj, Quad):
             return True
@@ -91,7 +94,7 @@ class CompositeQuad:
         except AssertionError:
             return False
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwds):
         """
         Define a composite quadrature rule from a collection of rules.
         
@@ -109,6 +112,16 @@ class CompositeQuad:
             integration, and `nodes` and `wts` are as above.
         
         The rules must be contiguous.
+
+        If there is a `factor` keyword argument, it should be a float considered
+        to be a constant factor taken out of the integrand; it will be applied
+        at the end of quadrature calculations.
+
+        Quadrature over part of the region spanned by the provided rules is
+        supported.  This requires the rules to have methods that integrate
+        over part of their range.  By default, the method name to be used
+        is 'quad_range', but a 'range_method' keyword argument may be provided,
+        specifying the name of the range-altering quadrature method. 
         """
         # Collect all the rules as QuadRule instances.
         self.rules = []
@@ -125,32 +138,64 @@ class CompositeQuad:
                 rule = Quad(*arg)
                 self.rules.append(rule)
                 last = rule
-        # Make an array of all the distinct nodes and their associated weights,
+        self.n_rules = len(self.rules)
+
+        # We can compute the quadrature by running through the rules and
+        # computing each one separately, but to accelerate the computation we
+        # make an array of all the distinct nodes and their associated weights,
         # summing weights of repeated nodes.
         prev = self.rules[0]
-        nodes = [ prev.nodes ]
+        nodes = [ prev.nodes ]  # we'll later concatenate these
         wts = [ prev.wts.copy() ]    # copy for when boundary wts change
-        self.starts = [0]  # keeps track of starting indices for rules
+        starts = [0]  # starts[i] = node index for 1st node from rule i
         self.npts = prev.npts
-        for rule in self.rules[1:]:
+        # To support the ability to alter the integration range, we'll also keep
+        # track of the ranges of the rules, rule ids for each node, and the
+        # weight contributions for duplicated nodes.
+        bounds = [prev.l]
+        node_ids = [0]*prev.npts  # gives id of 1st rule containing the node
+        node_dup = [False]*prev.npts  # will be tuple of wts if node is a dup
+        for i, rule in enumerate(self.rules[1:]):  # note i = rule # - 1
+            bounds.append(rule.l)
             if prev.nodes[-1] != rule.nodes[0]:  # no boundary node duplication
                 nodes.append(rule.nodes)
                 wts.append(rule.wts.copy())
-                self.starts.append(self.npts)
+                starts.append(self.npts)
                 self.npts += rule.npts
+                node_ids.extend([i+1]*rule.npts)
+                node_dup.extend([False]*rule.npts)
             else:  # boundary node duplication
+                new_pts = rule.npts - 1
                 nodes.append(rule.nodes[1:])
+                node_dup[-1] = (wts[-1][-1], rule.wts[0])  # contributions to wt
                 wts[-1][-1] += rule.wts[0]
                 wts.append(rule.wts[1:].copy())  # this has to be a copy, too
-                self.starts.append(self.npts-1)
-                self.npts += rule.npts - 1
+                starts.append(self.npts-1)
+                self.npts += new_pts
+                node_ids.extend([i+1]*new_pts)
+                node_dup.extend([False]*new_pts)
             prev = rule
+        self.bounds = array(bounds + [prev.u])
+        self.starts = array(starts)
+        self.node_dup = node_dup
         self.nodes = concatenate(nodes)
         self.wts = concatenate(wts)
-        self.factor = None
-        self.factors = None
+
+        # Lower & upper integration bounds:
         self.l = self.rules[0].l
         self.u = self.rules[-1].u
+
+        if 'factor' in kwds:
+            self.factor = kwds['factor']
+        else:
+            self.factor = 1.
+        # TODO:  Is there a use case for having separate factors for each rule?
+        # self.factors = None
+
+        if 'range_method' in kwds:
+            self.rm_name = kwds['range_method']
+        else:
+            self.rm_name = 'quad_range'
 
     def quad(self, f, call_rules=False):
         """
@@ -160,8 +205,10 @@ class CompositeQuad:
         If call_rules is True, the quadrature is calculated via calls to the
         component rules.  If False, it is calculated using the collected
         distinct nodes and accumulated weights.  These should give exactly
-        the same result; the latter (default) approach avoids some overhead.
+        the same result; the latter (default) approach avoids some overhead
+        that can be significant for simple integrands.
         """
+        # TODO:  If f() doesn't broadcast, iterate over nodes.
         if callable(f):
             fvals = f(self.nodes)
         elif len(f) == self.npts:
@@ -169,15 +216,103 @@ class CompositeQuad:
         else:
             raise ValueError('Argument must be callable or array of values!')
         self.fvals = fvals
-        if self.factor:
-            self.ivals = self.factor * self.fvals
-        else:
-            self.ivals = self.fvals
-        result = 0.
         if call_rules:
             # Go through the rules, passing the function evaluations.
+            result = 0.
             for rule, start in zip(self.rules, self.starts):
                 result += rule.quad(self.ivals[start:start+rule.npts])
-            return result
+            return self.factor*result
         else:
-            return sum(self.wts*fvals)
+            return self.factor*sum(self.wts*fvals)
+
+    def quad_range(self, f, l=None, u=None):
+        """
+        Evaluate the quadrature over [l,u] using the callable f().  If
+        either `l` or `u` is None, do not alter that integration bound.
+        """
+        if l is not None:
+            if l < self.l:
+                raise ValueError('Lower limit out of range!')
+        if u is not None:
+            if u > self.u:
+                raise ValueError('Upper limit out of range!')
+        # Use a subset of the collected nodes and weights, and then apply
+        # edge rules for any leftover parts.
+        # Note that to find the subset of nodes to use, we search over the
+        # rule bounds, not the node locations (they will lie inside the bounds
+        # for open rules).
+        # r_l will point to the 1st rule with lower limit >= l.
+        print 'full range, bounds:', self.l, self.u
+        print self.bounds
+        if l is None:
+            r_l = 0  # lowermost rule to include
+            lower = None
+        elif l == self.l:
+            r_l = 0
+            lower = None
+        else:
+            r_l = searchsorted(self.bounds, l)  # index of largest bound <= l
+            print 'l, sort:', l, '->', r_l
+            if r_l == 
+            lower = (l, self.rules[r_l].l)
+            if lower[0] == lower[1]:
+                lower = None
+        print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
+        # r_u will point to the 1st rule with upper limit <= u.  This could
+        # be 2 *less* than r_l if [l,u] lies within a single rule.
+        if u is None:
+            r_u = self.n_rules - 1  # uppermost rule to include
+            upper = None
+        else:
+            r_u = searchsorted(self.bounds, u)  # index of largest bound <= u
+            print 'u, sort:', u, '->', r_u
+            r_u -= 1  # since counting intervals, not elements
+            if u < self.rules[r_u].u:  # do not keep the interval if not full
+                r_u -= 1
+            upper = (self.rules[r_u].u, u)
+            if upper[0] == upper[1]:
+                upper = None
+        print 'u, r_u:', u, r_u, self.rules[r_u].l, self.rules[r_u].u
+
+        if r_u == r_l-2:  # [l,u] lies within 1 rule
+            range_method = getattr(self.rules[r_l-1], self.rm_name)
+            result = range_method(f, lower[0], upper[1])
+        elif r_u == r_l-1 and lower is None:  # [l,u] is in one rule, incl. left limit 
+            range_method = getattr(self.rules[r_u+1], self.rm_name)
+            result = range_method(f, upper[0], upper[1])
+        elif r_u == r_l-1 and upper is None:  # [l,u] is in one rule, incl. right limit 
+            range_method = getattr(self.rules[r_l-1], self.rm_name)
+            result = range_method(f, lower[0], lower[1])
+        elif r_u == r_l-1:  # [l,u] straddles 2 rules 
+            range_method = getattr(self.rules[r_l-1], self.rm_name)
+            result = range_method(f, lower[0], lower[1])
+            range_method = getattr(self.rules[r_u+1], self.rm_name)
+            result += range_method(f, upper[0], upper[1])
+        else:  # there are full and partial rules
+            # First do the part covered by full rules (if any).
+            n_l = self.starts[r_l]
+            n_u = self.starts[r_u] + self.rules[r_u].npts - 1
+            print 'full rule node range:', n_l, n_u
+            nodes = self.nodes[n_l:n_u+1]
+            if self.node_dup[n_l] or self.node_dup[n_u]:
+                wts = self.wts[n_l:n_u+1].copy()
+                if self.node_dup[n_l]:
+                    wts[0] = self.node_dup[n_l][1]
+                if self.node_dup[n_u]:
+                    wts[-1] = self.node_dup[n_u][0]
+            else:  # don't copy if we don't have to
+                wts = self.wts[n_l:n_u+1]
+            # TODO:  If f() doesn't broadcast, iterate over nodes.
+            result = sum(wts*f(nodes))
+            print nodes
+            print 'full part:', self.rules[r_l].l, self.rules[r_u].u, result
+
+            # Add partial intervals at each end.
+            if lower:
+                range_method = getattr(self.rules[r_l-1], self.rm_name)
+                result += range_method(f, lower[0], lower[1])
+            if upper:
+                range_method = getattr(self.rules[r_u+1], self.rm_name)
+                result += range_method(f, upper[0], upper[1])
+
+        return self.factor*result

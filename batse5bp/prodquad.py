@@ -55,6 +55,10 @@ rrt3 = 1/sqrt(3)  # reciprocal root 3
 rt3_5 = sqrt(3./5)
 
 
+# TODO:  For consistency with ProdQuadRule and readability, change u and
+# v args to lists/vectors.
+
+
 class ProdQuad1m(object):
     """
     Base class for interpolatory (1,m) product quadrature rules that calculate
@@ -138,7 +142,18 @@ class ProdQuad1m(object):
         """
         if f is not None or fvals is not None:  # otherwise assume prev. set
             self.set_f(f, fvals, ufunc)
-        return Quad(self.a, self.b, self.gnodes, self.gwts)
+
+        # Could build a Quad instance using the g quadrature (old approach):
+        #   return Quad(self.a, self.b, self.gnodes, self.gwts)
+
+        # Instead, define attributes providing the necessary Quad interface
+        # using the g quadrature (with preset f).
+        # *** Note this doesn't provide a quad_range method.
+        self.l, self.u = self.a, self.b
+        self.nodes = self.gnodes
+        self.wts = self.gwts
+        self.npts = len(self.nodes)
+        return self
 
 
 class ProdQuad11(ProdQuad1m):
@@ -275,8 +290,8 @@ class ProdQuadRule(object):
         using the same f() nodes but different integration limits (and 
         different g() nodes).
 
-        If limits are specified, a complete rule is constructed; in this
-        case, methods are available for computing the quadrature.
+        If the limits [a,b] are not specified, the support of the f() and g()
+        nodes is used for the limits.
 
         If `f` is provided, it is used as the first factor, f(x), defining an
         accelerated rule for quadrature when g() alone is subsequently 
@@ -295,27 +310,18 @@ class ProdQuadRule(object):
         self.g_deg = self.n_g - 1
         self.f_nodes = array(f_nodes, dtype=float)
         self.g_nodes = array(g_nodes, dtype=float)
-        if a is None or b is None:
-            if a is not None or b is not None:
+        if a is None and b is None:
+            if a is None or b is None:
                 raise ValueError('Must specify *both* a and b!')
-            self.a, self.b = None, None
-            bounded = False
-            self.fvals = None
+            # *** Note that this assumes a < b.
+            self.a = min(self.f_nodes[0], self.g_nodes[0])
+            self.b = max(self.f_nodes[-1], self.g_nodes[-1])
         else:
-            self.a, self.b = a, b
-            bounded = True
-            if f:
-                if callable(f):
-                    self.fvals = f(f_nodes)
-                else:
-                    self.fvals = f.copy()
-            else:
-                self.fvals = None
+            self.a, self.b = float(a), float(b)
 
         # The rule is specified by a (n_f+1)x(n_g+1) matrix of weights.
         # The denominators do not depend on [a,b] and so are cached for
         # use when [a,b] is changed.
-        self.fg_wts = empty((self.n_f,self.n_g), dtype=float)
         self.f_denom = ones_like(self.f_nodes)
         for i in xrange(self.n_f):
             self.f_denom[i] = prod(self.f_nodes[i] - delete(self.f_nodes, i))
@@ -327,6 +333,23 @@ class ProdQuadRule(object):
         for j in xrange(self.n_g):
             self.g_denom[j] = prod(self.g_nodes[j] - delete(self.g_nodes, j))
 
+        self.fg_wts = self._get_wts(self.f_nodes, self.g_nodes, 
+            self.f_denom, self.g_denom, self.a, self.b)
+
+        # *** Probably should reconcile use of f and fvals as arguments;
+        # other methods don't let f contain fvals.
+        if f:
+            if callable(f):
+                self.set_f(f)
+            else:
+                self.set_f(fvals=f(f_nodes))
+        else:
+            self.fvals = None
+
+    def _get_wts(self, f_nodes, g_nodes, f_denom, g_denom, a, b):
+        """
+        Calculate the quadrature weight matrix from the nodes and range.
+        """
         # The weights are integrals of products of the Lagrange basis
         # polynomials over [a,b].  Store arrays defining the indefinite
         # integrals (via polynomial coefficients) so weights for new [a,b] can
@@ -334,45 +357,42 @@ class ProdQuadRule(object):
         # Each indefinite integral is a f_deg*g_deg+1 degree polynomial without
         # a constant term, thus with f_deg+g_deg+1 coefficients.
         n_c = self.f_deg+self.g_deg+1
-        self.indefs = empty((self.n_f, self.n_g, n_c), dtype=float)
+        indefs = empty(n_c, dtype=float)
 
         # powers will hold divisors converting polynomial coefs to indefinite
         # integral coefs, i.e., the powers of the integrated monomial terms.
         powers = arange(1, n_c+1, dtype=float)
-        f_roots = empty(self.f_deg)
-        g_roots = empty(self.g_deg)
         roots = empty(self.f_deg+self.g_deg)
         j0 = self.n_f - 1  # index for the first g_roots entry in roots
-        # print
-        # print self.n_f, self.n_g
+        fg_wts = empty((self.n_f,self.n_g), dtype=float)
         for i in xrange(self.n_f):
             if i>0:
-                roots[0:i] = self.f_nodes[0:i]
+                roots[0:i] = f_nodes[0:i]
             if i<self.n_f-1:
                 # Start at i since we're skipping entry i.
-                roots[i:j0] = self.f_nodes[i+1:]
+                roots[i:j0] = f_nodes[i+1:]
             for j in xrange(self.n_g):
                 if j>0:
-                    roots[j0:j0+j] = self.g_nodes[0:j]
+                    roots[j0:j0+j] = g_nodes[0:j]
                 if j<self.n_g-1:
                     # Start at j0+j since we're skipping entry j.
-                    roots[j0+j:] = self.g_nodes[j+1:]
+                    roots[j0+j:] = g_nodes[j+1:]
                 # print i, j, roots
                 coefs = roots2coefs(roots)
-                self.indefs[i,j,:] = coefs/powers
+                indefs = coefs/powers
+                # TODO:  This may be wasteful, repeatedly calculating powers of
+                # a and b.
+                fg_wts[i,j] = indef2def(indefs, a, b) / \
+                              (f_denom[i]*g_denom[j])
+        return fg_wts
 
-        if bounded:
-            self.set_wts(a, b)
-
-        # *** This duplicates some initialization done above.
-        if self.fvals is not None:
-            self.set_f(fvals=self.fvals)
-
-    def set_wts(self, a, b):
+    def _set_wts(self, a, b):
         """
         Using the integration range [a,b], calculate the quadrature weight
         matrix.
         """
+        # *** This leaves both the f and g nodes unchanged; don't use it to
+        # change [a,b], unless the nodes are meant to be kept fixed.
         for i in xrange(self.n_f):
             for j in xrange(self.n_g):
                 # TODO:  This may be wasteful, repeatedly calculating powers of
@@ -380,21 +400,61 @@ class ProdQuadRule(object):
                 self.fg_wts[i,j] = indef2def(self.indefs[i,j,:], a, b) / \
                                 (self.f_denom[i]*self.g_denom[j])
 
-    def get_fg_wts(self, a, b):
+    def get_g_nodes_wts(self, a, b):
         """
         Using the integration range [a,b], calculate the quadrature weight
         matrix and return it.  This does not change the value of any
         previously-set weight matrix stored in the instance, and thus has
         no effect on future calls of the quad_fg() and quad_g() methods.
         """
-        fg_wts = empty((self.n_f,self.n_g), dtype=float)
-        for i in xrange(self.n_f):
-            for j in xrange(self.n_g):
-                # TODO:  This may be wasteful, repeatedly calculating powers of
-                # a and b.
-                fg_wts[i,j] = indef2def(self.indefs[i,j,:], a, b) / \
-                              (self.f_denom[i]*self.g_denom[j])
-        return fg_wts
+        # *** Perhaps let user supply g_nodes, g_wts arrays to avoid frequent
+        # reallocation?  Or keep scratch space?
+        if a is None:
+            a = self.a
+        if b is None:
+            b = self.b
+        fac = (b - a)/(self.b - self.a)
+        g_nodes = a + fac*(self.g_nodes - self.a)
+
+        # *** Keep scratch space for g_denom, fg_wts, roots...?
+
+        g_denom = self.g_denom * fac**(self.n_g-1)
+        # g_denom2 = ones_like(g_nodes)
+        # for j in xrange(self.n_g):
+        #     g_denom2[j] = prod(g_nodes[j] - delete(g_nodes, j))
+        # print 'denom:', g_denom2 - g_denom
+
+        # fg_wts = empty((self.n_f,self.n_g), dtype=float)
+        # powers = arange(1, self.n_c+1, dtype=float)
+        # roots = empty(self.f_deg+self.g_deg)
+        # indefs = empty(self.n_c, dtype=float)
+        # j0 = self.n_f - 1  # index for the first g_roots entry in roots
+        # for i in xrange(self.n_f):
+        #     if i>0:
+        #         roots[0:i] = self.f_nodes[0:i]
+        #     if i<self.n_f-1:
+        #         # Start at i since we're skipping entry i.
+        #         roots[i:j0] = self.f_nodes[i+1:]
+        #     for j in xrange(self.n_g):
+        #         if j>0:
+        #             roots[j0:j0+j] = g_nodes[0:j]
+        #         if j<self.n_g-1:
+        #             # Start at j0+j since we're skipping entry j.
+        #             roots[j0+j:] = g_nodes[j+1:]
+        #         # print i, j, roots
+        #         coefs = roots2coefs(roots)
+        #         indefs = coefs/powers
+        #         # TODO:  This may be wasteful, repeatedly calculating powers of
+        #         # a and b.
+        #         fg_wts[i,j] = indef2def(indefs, a, b) / \
+        #                       (self.f_denom[i]*g_denom[j])
+
+        fg_wts = self._get_wts(self.f_nodes, g_nodes, self.f_denom, g_denom, a, b)
+        g_wts = empty(self.n_g)
+        # *** Do this with dot()?
+        for j in range(self.n_g):
+            g_wts[j] = sum(self.fvals*fg_wts[:,j])
+        return g_nodes, g_wts
 
     def set_f(self, f=None, fvals=None, ufunc=True):
         """
@@ -414,7 +474,9 @@ class ProdQuadRule(object):
             self.fvals = fvals
 
         self.f = f
+        # *** Don't reallocate this if it exists.
         self.g_wts = empty(self.n_g)
+        # *** Do this with dot()?
         for j in range(self.n_g):
             self.g_wts[j] = sum(self.fvals*self.fg_wts[:,j])
 
@@ -443,7 +505,28 @@ class ProdQuadRule(object):
             gvals = g(self.g_nodes)
         else:
             gvals = array( [g(self.g_nodes[j]) for j in range(self.n_g)] )
-        return dot(self.gwts, gvals)
+        return dot(self.g_wts, gvals)
+
+    def quad_g_range(self, g, a=None, b=None, ufunc=True):
+        """
+        Evaluate the quadrature over [a,b] using the function g(), and
+        previously specified f() values.  Use a modified rule that
+        transforms the originally-specified g() nodes according to [a,b].
+        E.g., if the original g() nodes were inside the original [a,b],
+        the new nodes will be inside the newly-specified [a,b].
+
+        If either a or b is None, the stored value will be used.
+
+        The rule stored in the instance will *not* be changed.
+        """
+        g_nodes, g_wts = self.get_g_nodes_wts(a, b)
+        print g_nodes
+        print g_wts
+        if ufunc:
+            gvals = g(g_nodes)
+        else:
+            gvals = array( [g(g_nodes[j]) for j in range(self.n_g)] )
+        return dot(g_wts, gvals)
 
     def quad_object(self, f=None, fvals=None, ufunc=True):
         """
@@ -453,4 +536,9 @@ class ProdQuadRule(object):
         """
         if f is not None or fvals is not None:  # otherwise assume prev. set
             self.set_f(f, fvals, ufunc)
-        return Quad(self.a, self.b, self.g_nodes, self.g_wts)
+        quad = Quad(self.a, self.b, self.g_nodes, self.g_wts)
+        # Add an attribute pointing back to this PolyQuadRule instance.
+        quad.creator = self
+        # Add a quad_range method corresponding to quad_g_range.
+        quad.quad_range = self.quad_g_range
+        return quad
