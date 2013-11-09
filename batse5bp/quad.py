@@ -241,7 +241,7 @@ class CompositeQuad:
         # Note that to find the subset of nodes to use, we search over the
         # rule bounds, not the node locations (they will lie inside the bounds
         # for open rules).
-        # r_l will point to the 1st rule with lower limit >= l.
+        # r_l will point to the left-closed rule containing l.
         print 'full range, bounds:', self.l, self.u
         print self.bounds
         if l is None:
@@ -251,68 +251,84 @@ class CompositeQuad:
             r_l = 0
             lower = None
         else:
-            r_l = searchsorted(self.bounds, l)  # index of largest bound <= l
-            print 'l, sort:', l, '->', r_l
-            if r_l == 
-            lower = (l, self.rules[r_l].l)
-            if lower[0] == lower[1]:
+            # Searchsorted gives an insertion index, for the largest bound <= l
+            r_l = searchsorted(self.bounds, l)
+            r_l -= 1  # since counting intervals, not elements; 0 case handled above
+            lower = (l, self.rules[r_l].u)
+            if l == lower[1]:  # if l @ right boundary, use the next rule
                 lower = None
-        print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
-        # r_u will point to the 1st rule with upper limit <= u.  This could
-        # be 2 *less* than r_l if [l,u] lies within a single rule.
+                r_l += 1
+        # r_u will point to the right-closed rule containing u.
         if u is None:
-            r_u = self.n_rules - 1  # uppermost rule to include
+            r_u = self.n_rules - 1  # uppermost rule index
             upper = None
         else:
             r_u = searchsorted(self.bounds, u)  # index of largest bound <= u
-            print 'u, sort:', u, '->', r_u
             r_u -= 1  # since counting intervals, not elements
-            if u < self.rules[r_u].u:  # do not keep the interval if not full
-                r_u -= 1
-            upper = (self.rules[r_u].u, u)
-            if upper[0] == upper[1]:
+            upper = (self.rules[r_u].l, u)
+            if u == self.rules[r_u].u:  # if u @ right boundary, use the full rule
                 upper = None
+        print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
         print 'u, r_u:', u, r_u, self.rules[r_u].l, self.rules[r_u].u
+        print 'lo, up:', lower, upper
 
-        if r_u == r_l-2:  # [l,u] lies within 1 rule
-            range_method = getattr(self.rules[r_l-1], self.rm_name)
-            result = range_method(f, lower[0], upper[1])
-        elif r_u == r_l-1 and lower is None:  # [l,u] is in one rule, incl. left limit 
-            range_method = getattr(self.rules[r_u+1], self.rm_name)
-            result = range_method(f, upper[0], upper[1])
-        elif r_u == r_l-1 and upper is None:  # [l,u] is in one rule, incl. right limit 
-            range_method = getattr(self.rules[r_l-1], self.rm_name)
-            result = range_method(f, lower[0], lower[1])
-        elif r_u == r_l-1:  # [l,u] straddles 2 rules 
-            range_method = getattr(self.rules[r_l-1], self.rm_name)
-            result = range_method(f, lower[0], lower[1])
-            range_method = getattr(self.rules[r_u+1], self.rm_name)
-            result += range_method(f, upper[0], upper[1])
+        if r_u == r_l:  # [l,u] lies within 1 rule
+            range_method = getattr(self.rules[r_l], self.rm_name)
+            if lower:
+                a = lower[0]
+            else:
+                a = self.rules[r_l].l
+            if upper:
+                b = upper[1]
+            else:
+                b = self.rules[r_l].u
+            result = range_method(f, a, b)
+        # elif r_u == r_l-1 and lower is None:  # [l,u] is in one rule, incl. left limit 
+        #     range_method = getattr(self.rules[r_u+1], self.rm_name)
+        #     result = range_method(f, upper[0], upper[1])
+        # elif r_u == r_l-1 and upper is None:  # [l,u] is in one rule, incl. right limit 
+        #     range_method = getattr(self.rules[r_l-1], self.rm_name)
+        #     result = range_method(f, lower[0], lower[1])
+        # elif r_u == r_l-1:  # [l,u] straddles 2 rules 
+        #     range_method = getattr(self.rules[r_l-1], self.rm_name)
+        #     result = range_method(f, lower[0], lower[1])
+        #     range_method = getattr(self.rules[r_u+1], self.rm_name)
+        #     result += range_method(f, upper[0], upper[1])
         else:  # there are full and partial rules
             # First do the part covered by full rules (if any).
-            n_l = self.starts[r_l]
-            n_u = self.starts[r_u] + self.rules[r_u].npts - 1
-            print 'full rule node range:', n_l, n_u
-            nodes = self.nodes[n_l:n_u+1]
-            if self.node_dup[n_l] or self.node_dup[n_u]:
-                wts = self.wts[n_l:n_u+1].copy()
-                if self.node_dup[n_l]:
-                    wts[0] = self.node_dup[n_l][1]
-                if self.node_dup[n_u]:
-                    wts[-1] = self.node_dup[n_u][0]
-            else:  # don't copy if we don't have to
-                wts = self.wts[n_l:n_u+1]
-            # TODO:  If f() doesn't broadcast, iterate over nodes.
-            result = sum(wts*f(nodes))
-            print nodes
-            print 'full part:', self.rules[r_l].l, self.rules[r_u].u, result
+            r_full_l = r_l
+            if lower:  # next rule is the lowest possible full one 
+                r_full_l += 1
+            r_full_u = r_u
+            if upper:  # prev rule is the highest possible full one
+                r_full_u -= 1
+            print 'full rules:', r_full_l, r_full_u
+            if r_full_u < r_full_l:  # no full rules; [l,u] straddles a boundary
+                result = 0.
+            else:  # do the full rules
+                n_l = self.starts[r_full_l]
+                n_u = self.starts[r_full_u] + self.rules[r_full_u].npts - 1
+                print 'full rule node range:', n_l, n_u
+                nodes = self.nodes[n_l:n_u+1]
+                if self.node_dup[n_l] or self.node_dup[n_u]:
+                    wts = self.wts[n_l:n_u+1].copy()
+                    if self.node_dup[n_l]:
+                        wts[0] = self.node_dup[n_l][1]
+                    if self.node_dup[n_u]:
+                        wts[-1] = self.node_dup[n_u][0]
+                else:  # don't copy if we don't have to
+                    wts = self.wts[n_l:n_u+1]
+                # TODO:  If f() doesn't broadcast, iterate over nodes.
+                result = sum(wts*f(nodes))
+                print nodes
+                print 'full part:', self.rules[r_l].l, self.rules[r_u].u, result
 
             # Add partial intervals at each end.
             if lower:
-                range_method = getattr(self.rules[r_l-1], self.rm_name)
+                range_method = getattr(self.rules[r_l], self.rm_name)
                 result += range_method(f, lower[0], lower[1])
             if upper:
-                range_method = getattr(self.rules[r_u+1], self.rm_name)
+                range_method = getattr(self.rules[r_u], self.rm_name)
                 result += range_method(f, upper[0], upper[1])
 
         return self.factor*result

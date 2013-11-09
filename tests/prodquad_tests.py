@@ -316,9 +316,20 @@ x_x_case = [fg_1_1,        # functions
              (None, 0.6),  # start to middle
              (None, 0.3),  # all in 1st rule
              (.9, None),   # all in last rule
+             (0.2, 0.9),   # full rule between limits
              (0.5, 0.6)]]  # all in middle rule; no full rules
 
-range_cases = [x_x_case]
+x_xx_case = [fg_1_2,        # functions
+             (0., 1.),     # initial range
+             [(0., 1.),    # duplicate full range
+             (0.5, None),  # middle to end
+             (None, 0.6),  # start to middle
+             (None, 0.3),  # all in 1st rule
+             (.9, None),   # all in last rule
+             (0.2, 0.9),   # full rule between limits
+             (0.5, 0.6)]]  # all in middle rule; no full rules
+
+range_cases = [x_x_case, x_xx_case]
 
 def test_comp_range_cases():
     for funcs, c0, cases in range_cases:
