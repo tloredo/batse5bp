@@ -24,10 +24,10 @@ Created 2012-10-16 by Tom Loredo
 from os.path import join, exists
 import cPickle
 
-from numpy import zeros, minimum, array
+from numpy import zeros, minimum, array, array_equal
 import pyfits
 
-from prodquad import ProdQuad12, CompositeQuad
+from prodquad import ProdQuadRule, CompositeQuad
 
 
 # This list of the binary table header fields was obtained from a DISCSC DRM
@@ -192,7 +192,7 @@ class DRMs_DISCSC:
         self.E_bins = self.detectors[0].E_bins
 
         # Do a quick check of consistency between detectors.
-        # TODO:  Verify more thoroughly?
+        # TODO:  Verify more thoroughly with array_equal?
         # TODO:  Do this only when reading the FITS file.
         for n, detector in enumerate(self.detectors[1:]):
             for i in [0,1]:  # just check 1st 2 bins
@@ -218,7 +218,7 @@ class DRMs_DISCSC:
         self.file_id = primary['file-id']  # contains trigger #
 
         self.n_ch = primary['n_e_chan']  # number of discriminator channels
-        # number of of incident photon energies (*not* bins):
+        # number of of incident photon energies (should *not* be bins):
         self.n_E = primary['n_e_bins']
         self.alpha = primary['alpha']  #  weighting across input bins for direct matrix
 
@@ -256,7 +256,7 @@ class DRMs_DISCSC:
     def set_sum_prodquad(self, m=1, n=2):
         """
         Set up a composite interpolatory product quadtrature rule for the
-        summed DRM.
+        detector-summed DRM.
 
         Currently only a composite (1,2) rule is available, with a separate
         rule for each DRM interval.
@@ -284,15 +284,18 @@ class DRMs_DISCSC:
             for i in range(len(E_vals)-1):
                 l, u = E_vals[i], E_vals[i+1]
                 fvals = self.drm[ch,i:i+2]
-                pq = ProdQuad12(l, u, l, u, fvals=fvals)  # use Gauss-Legendre g nodes
+                # pq = ProdQuad12(l, u, l, u, fvals=fvals)  # use Gauss-Legendre g nodes
+                pq = ProdQuadRule([l, u], 3, l, u, f=fvals)  # use Gauss-Legendre g nodes
                 rules.append(pq.quad_object())
             self.quad_rules.append(CompositeQuad(*rules))
 
         # Pull out the nodes for easy access.
-        self.quad_nodes = []
-        for ch in range(self.n_ch):
-            self.quad_nodes.append(self.quad_rules[ch].nodes)
-        self.quad_nodes = array(self.quad_nodes)
+        self.quad_nodes = self.quad_rules[0].nodes.copy()
+        # The nodes (but not wts) should be the same for all channels.
+        for ch in range(1, self.n_ch):
+            if not array_equal(self.quad_nodes, self.quad_rules[ch].nodes):
+                raise ValueError('Quadrature nodes do not match across channels!')
+
 
     def chan_quad(self, ch, spec, *args):
         """
@@ -310,9 +313,46 @@ class DRMs_DISCSC:
         is of interest.
         """
         if callable(spec):
-            svals = array( [spec(E, *args) for E in self.quad_nodes[ch,:]] )
-        elif len(spec) == self.quad_nodes.shape[1]:
+            svals = array( [spec(E, *args) for E in self.quad_nodes] )
+        elif len(spec) == self.quad_nodes.shape[0]:
             svals = spec
         else:
             raise ValueError('Argument must be callable or array of values!')
         return self.quad_rules[ch].quad(svals)
+
+    def quad_nodes_wts(self, l=None, u=None):
+        """
+        Return the nodes and weights for quadrature rules integrating DRMs
+        times an incident spectrum.
+
+        `l` and `u` specify the incident energy range for the quadrature.  If
+        either value is None, the corresponding limit is set equal to the
+        DRM limit.  If either limit is beyond the range of the DRM, it is
+        truncated.
+
+        A tuple is returned:  (`nodes`, `wts`) where `wts` is a list of
+        weight vectors, `wts[c]` being the vector of weights for channel `c`.
+
+        If `svals` holds incident spectrum values evaluated on the nodes,
+        the expected count rate for channel `c` is:
+
+            sum(svals*wts[c])
+        """
+        if l <= self.E_bins[0]:
+            l = None
+        if u >= self.E_bins[-1]:
+            u = None
+
+        # Full-range case:
+        if l is None and u is None:
+            wts = []
+            for ch in range(self.n_ch):
+                wts.append(self.quad_rules[ch].wts)
+            return self.quad_nodes, wts
+
+        # Otherwise we have to modify the rules to fit the range.
+        wts = []
+        for ch in range(self.n_ch):
+            nodes, ch_wts = self.quad_rules[ch].range_nodes_wts(l, u)
+            wts.append(ch_wts)
+        return nodes, wts
