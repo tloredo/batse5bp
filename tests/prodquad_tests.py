@@ -34,7 +34,12 @@ def f_x(x):
 
 def g_x(x):
     return x
-g_x.cases = [(f_1, 0, 1, .5), (f_x, 0., 1., 1/3.)]
+g_x.cases = [(f_1, 0, 1, .5), (f_1, .5, 2.7, (2.7**2 - .5**2)/2),
+             (f_1, -.5, 2.7, (2.7**2 - .5**2)/2),
+             (f_1, -.5, -2.7, (2.7**2 - .5**2)/2), 
+             (f_x, 0., 1., 1/3.), (f_x, 0.5, 2.7, (2.7**3 - .5**3)/3),
+             (f_x, -0.5, 2.7, (2.7**3 - (-.5)**3)/3),
+             (f_x, -0.5, -2.7, ((-2.7)**3 - (-.5)**3)/3)]
 
 def g_xm1(x):
     return x-1.
@@ -46,7 +51,10 @@ g_x2.cases = [(f_1, 0, 1, 1/3.), (f_x, 0., 1., .25)]
 
 def g_x3(x):
     return x**3
-g_x3.cases = [(f_1, 0, 1, .25), (f_x, 0., 1., .2)]
+g_x3.cases = [(f_1, 0, 1, .25),
+              (f_1, -.5, 2.7, (2.7**4 - .5**4)/4), 
+              (f_x, 0., 1., .2),
+              (f_x, -.5, 2.7, (2.7**5 - (-.5)**5)/5)]
 
 def g_x4(x):
     return x**4
@@ -55,11 +63,13 @@ g_x4.cases = [(f_1, 0, 1, .2), (f_x, 0., 1., 1./6)]
 def g_x5(x):
     return x**5
 # g_x5.cases = [(f_1, 0, 1, 1./6), (f_x, 0., 1., 1./7)]
-g_x5.cases = [(f_1, 0, 1, 1./6)]
+g_x5.cases = [(f_1, 0, 1, 1./6), (f_1, .5, 2.7, (2.7**6 - .5**6)/6),
+            (f_1, -.5, 2.7, (2.7**6 - .5**6)/6)]
 
 
 # TODO:  This class was introduced for the later tests; should convert
-# earlier tests to this format.
+# earlier tests to this format.  Can just have various monomials that
+# serve as either f or g.
 
 class ProdQuadFuncs:
     
@@ -305,7 +315,7 @@ def test_pqr_range_cases():
 # Cases and checker for testing changing the integration range in composites.
 
 def check_comp_range_case(cq, g, a, b, result):
-    print 'case:', g(2), a, b
+    print 'case - g(2), a, b:', g(2), a, b
     q = cq.quad_range(g, a, b)
     assert_almost_equal(q, result)
 

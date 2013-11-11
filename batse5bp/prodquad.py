@@ -45,14 +45,29 @@ Created 2012-10-25 by Tom Loredo
 
 from numpy import sqrt, empty, ones_like, array, concatenate, arange
 from numpy import sum, dot, prod, delete
+from scipy.special.orthogonal import p_roots  # Gauss-Legendre nodes, wts
 
 from quad import Quad, CompositeQuad
 from poly import roots2coefs, indef2def
 
 
-# Constants for Gauss-Legendre nodes:
-rrt3 = 1/sqrt(3)  # reciprocal root 3
-rt3_5 = sqrt(3./5)
+__all__ = ['ProdQuad11', 'ProdQuad12', 'ProdQuadRule', 'CompositeQuad']
+
+
+# Constants for Gauss-Legendre nodes (not necessary after switch to p_roots):
+# rrt3 = 1/sqrt(3)  # reciprocal root 3
+# rt3_5 = sqrt(3./5)
+
+
+def gl_nodes(npts, a, b):
+    """
+    Return the nodes for `npts`-point Gauss-Legendre quadrature over the
+    interval [a, b].
+    """
+    # The default definition is over [-1, 1]; shift and scale.
+    nodes, wts = p_roots(npts)
+    # return 0.5*(nodes + 1.)
+    return a + 0.5*(b - a)*(nodes + 1.)
 
 
 # TODO:  For consistency with ProdQuadRule and readability, change u and
@@ -177,10 +192,11 @@ class ProdQuad11(ProdQuad1m):
         ProdQuad1m.__init__(self, a, b, u_0, u_1, 1)  # set up for m=1
         if v_0 is None:
             if v_1 is None:  # use Gauss-Legendre nodes for g()
-                mid = 0.5*(a + b)
-                offset = 0.5*(b - a)*rrt3
-                v_0 = mid - offset
-                v_1 = mid + offset
+                # mid = 0.5*(a + b)
+                # offset = 0.5*(b - a)*rrt3
+                # v_0 = mid - offset
+                # v_1 = mid + offset
+                v_0, v_1 = gl_nodes(2, a, b)
             else:
                 raise ValueError('Invalid v nodes!')
         else:
@@ -230,11 +246,12 @@ class ProdQuad12(ProdQuad1m):
         """
         ProdQuad1m.__init__(self, a, b, u_0, u_1, 2)  # set up for m=1
         if v_0 is None and v_1 is None and v_2 is None:  # use Gauss-Legendre nodes for g()
-            mid = 0.5*(a + b)
-            offset = 0.5*(b - a)*rt3_5
-            v_0 = mid - offset
-            v_1 = mid
-            v_2 = mid + offset
+            # mid = 0.5*(a + b)
+            # offset = 0.5*(b - a)*rt3_5
+            # v_0 = mid - offset
+            # v_1 = mid
+            # v_2 = mid + offset
+            v_0, v_1, v_2 = gl_nodes(3, a, b)
         else:
             self.v_0, self.v_1, self.v_2 = v_0, v_1, v_2
         self.gnodes = array([v_0, v_1, v_2], float)
@@ -290,26 +307,45 @@ class ProdQuadRule(object):
         using the same f() nodes but different integration limits (and 
         different g() nodes).
 
+        If either `f_nodes` or `g_nodes` is a positive integer rather than an
+        array or sequence of node locations, then that integer is the number of
+        Gauss-Legendre nodes used.
+
         If the limits [a,b] are not specified, the support of the f() and g()
-        nodes is used for the limits.
+        nodes is used for the limits (in this case, both of the nodes
+        arguments must contain a sequence of node values).
 
         If `f` is provided, it is used as the first factor, f(x), defining an
-        accelerated rule for quadrature when g() alone is subsequently 
-        specified.  `f` may be either the (callable) function f(x), or a
-        vector of values of f() evaluated over f_nodes.  It is used only if
-        [a,b] is specified.  f() may also be set later via the set_f() method.
+        accelerated rule for quadrature when g() alone is subsequently
+        specified.  `f` may be either the (callable) function f(x), or a vector
+        of values of f() evaluated over f_nodes.  f() may also be set later via
+        the set_f() method.
         """
         # The # of nodes minus 1 is the degree of the Lagrange polynomial used
         # for interpolation.  Typically this is the degree (separate for f & g)
         # for which quadrature of polynomials is exact.  If the nodes are
         # Gaussian quadrature nodes, the result will be exact for polynomials of
         # higher degree (with appropriate weight function).
-        self.n_f = len(f_nodes)
+        try:  # sequence of node values
+            self.n_f = len(f_nodes)
+            self.f_nodes = array(f_nodes, dtype=float)
+        except TypeError:  # if f_nodes is not a sequence
+            if f_nodes <= 0:
+                raise ValueError('f_nodes must be a positive integer!')
+            self.n_f = f_nodes
+            self.f_nodes = gl_nodes(self.n_f, a, b)
         self.f_deg = self.n_f - 1
-        self.n_g = len(g_nodes)
+
+        try:  # sequence of node values
+            self.n_g = len(g_nodes)
+            self.g_nodes = array(g_nodes, dtype=float)
+        except TypeError:  # if g_nodes is not a sequence
+            if g_nodes <= 0:
+                raise ValueError('g_nodes must be a positive integer!')
+            self.n_g = g_nodes
+            self.g_nodes = gl_nodes(self.n_g, a, b)
         self.g_deg = self.n_g - 1
-        self.f_nodes = array(f_nodes, dtype=float)
-        self.g_nodes = array(g_nodes, dtype=float)
+
         if a is None and b is None:
             if a is None or b is None:
                 raise ValueError('Must specify *both* a and b!')
@@ -338,11 +374,11 @@ class ProdQuadRule(object):
 
         # *** Probably should reconcile use of f and fvals as arguments;
         # other methods don't let f contain fvals.
-        if f:
+        if f is not None:
             if callable(f):
                 self.set_f(f)
             else:
-                self.set_f(fvals=f(f_nodes))
+                self.set_f(fvals=f)
         else:
             self.fvals = None
 
@@ -539,6 +575,8 @@ class ProdQuadRule(object):
         quad = Quad(self.a, self.b, self.g_nodes, self.g_wts)
         # Add an attribute pointing back to this PolyQuadRule instance.
         quad.creator = self
-        # Add a quad_range method corresponding to quad_g_range.
+        # Add a range methods corresponding to quad_g_range and get_g_nodes_wts,
+        # for use in composite rules.
         quad.quad_range = self.quad_g_range
+        quad.quad_range_nodes_wts = self.get_g_nodes_wts
         return quad
