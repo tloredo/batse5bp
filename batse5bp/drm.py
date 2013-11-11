@@ -296,6 +296,10 @@ class DRMs_DISCSC:
             if not array_equal(self.quad_nodes, self.quad_rules[ch].nodes):
                 raise ValueError('Quadrature nodes do not match across channels!')
 
+        # Record the integration range; it will be somewhat larger than the
+        # span of quad_nodes because an open rule is used.
+        self.E_l = E_vals[0]
+        self.E_u = E_vals[-1]
 
     def chan_quad(self, ch, spec, *args):
         """

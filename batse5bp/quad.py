@@ -256,8 +256,8 @@ class CompositeQuad:
         # bounds for open rules).
 
         # r_l will point to the left-closed rule containing l.
-        print 'full range, bounds:', self.l, self.u
-        print self.bounds
+        # print 'full range, bounds:', self.l, self.u
+        # print self.bounds
         if l is None:
             r_l = 0  # lowermost rule to include
             lower = None
@@ -282,9 +282,9 @@ class CompositeQuad:
             upper = (self.rules[r_u].l, u)
             if u == self.rules[r_u].u:  # if u @ right boundary, use the full rule
                 upper = None
-        print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
-        print 'u, r_u:', u, r_u, self.rules[r_u].l, self.rules[r_u].u
-        print 'lo, up:', lower, upper
+        # print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
+        # print 'u, r_u:', u, r_u, self.rules[r_u].l, self.rules[r_u].u
+        # print 'lo, up:', lower, upper
 
         # Now collect the nodes and weights.
         if r_u == r_l:  # [l,u] lies within 1 rule -> get new nodes, weights
@@ -310,13 +310,11 @@ class CompositeQuad:
             r_full_u = r_u
             if upper:  # prev rule is the highest possible full one
                 r_full_u -= 1
-            print 'full rules:', r_full_l, r_full_u
             if r_full_u < r_full_l:  # no full rules; [l,u] straddles a boundary
                 pass
             else:  # do the full rules
                 n_l = self.starts[r_full_l]
                 n_u = self.starts[r_full_u] + self.rules[r_full_u].npts - 1
-                print 'full rule node range:', n_l, n_u
                 nodes = self.nodes[n_l:n_u+1]
                 if self.node_dup[n_l] or self.node_dup[n_u]:
                     wts = self.wts[n_l:n_u+1].copy()
@@ -329,8 +327,6 @@ class CompositeQuad:
                 # TODO:  If f() doesn't broadcast, iterate over nodes.
                 nlist.append(nodes)
                 wlist.append(wts)
-                print nodes
-                print 'full part:', self.rules[r_l].l, self.rules[r_u].u
 
             # Add partial intervals at each end.
             if lower:
@@ -370,8 +366,6 @@ class CompositeQuad:
         # rule bounds, not the node locations (they will lie inside the bounds
         # for open rules).
         # r_l will point to the left-closed rule containing l.
-        print 'full range, bounds:', self.l, self.u
-        print self.bounds
         if l is None:
             r_l = 0  # lowermost rule to include
             lower = None
@@ -396,9 +390,6 @@ class CompositeQuad:
             upper = (self.rules[r_u].l, u)
             if u == self.rules[r_u].u:  # if u @ right boundary, use the full rule
                 upper = None
-        print 'l, r_l:', l, r_l, self.rules[r_l].l, self.rules[r_l].u
-        print 'u, r_u:', u, r_u, self.rules[r_u].l, self.rules[r_u].u
-        print 'lo, up:', lower, upper
 
         if r_u == r_l:  # [l,u] lies within 1 rule
             range_method = getattr(self.rules[r_l], self.rm_name)
@@ -419,13 +410,11 @@ class CompositeQuad:
             r_full_u = r_u
             if upper:  # prev rule is the highest possible full one
                 r_full_u -= 1
-            print 'full rules:', r_full_l, r_full_u
             if r_full_u < r_full_l:  # no full rules; [l,u] straddles a boundary
                 result = 0.
             else:  # do the full rules
                 n_l = self.starts[r_full_l]
                 n_u = self.starts[r_full_u] + self.rules[r_full_u].npts - 1
-                print 'full rule node range:', n_l, n_u
                 nodes = self.nodes[n_l:n_u+1]
                 if self.node_dup[n_l] or self.node_dup[n_u]:
                     wts = self.wts[n_l:n_u+1].copy()
@@ -437,8 +426,6 @@ class CompositeQuad:
                     wts = self.wts[n_l:n_u+1]
                 # TODO:  If f() doesn't broadcast, iterate over nodes.
                 result = sum(wts*f(nodes))
-                print nodes
-                print 'full part:', self.rules[r_l].l, self.rules[r_u].u, result
 
             # Add partial intervals at each end.
             if lower:
