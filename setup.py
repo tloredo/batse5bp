@@ -29,7 +29,7 @@ if __name__ == '__main__':
     from numpy.distutils.core import setup
     setup(
         # name = 'batse5bp',  # use if name not given in configuration
-        version = '0.1',
+        version = '0.2a',
         packages = ['batse5bp'],
         install_requires=['numpy'],
         maintainer = "Tom Loredo",

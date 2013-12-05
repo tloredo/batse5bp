@@ -55,7 +55,6 @@ def integrate_poly(coef, a, b):
     # Array of coefficients of the indefinite integral, dropping the
     # arbitrary constant term (it would have been icoef[0]).
     icoef = array([c/(i+1.) for i, c in enumerate(coef)])
-    print icoef
     return indef2def(icoef, a, b)
 
     # This codes indef2def in place:

@@ -11,6 +11,7 @@ batse5bp/drm.py
 batse5bp/grb.py
 batse5bp/locations.py
 batse5bp/persistant.py
+batse5bp/poly.py
 batse5bp/prodquad.py
 batse5bp/quad.py
 batse5bp/read_tte.py
