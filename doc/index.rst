@@ -228,6 +228,10 @@ A burst may have multiple comments associate with it, each with a
 flag identifying the comment type.  The ``comments`` attribute is a
 list of 2-tuples containing the flag and its associated comment.
 
+
+Accessing documentation for catalog and detailed data
+-----------------------------------------------------
+
 To understand the comments and the other catalog attributes, the
 authoritative reference is the catalog description text available at
 the SSC.  The package provides local copies of the text for the
@@ -256,12 +260,16 @@ comprising the catalog:  ``basic`` (with the trigger number, data, direction,
 overwrite flag, etc.), ``flux`` (with peak fluxes and fluences), and ``durn``
 (with durations).
 
-The ``docn`` module also provides four convenience functions that will
-open important web pages at the SSC in your default browser; for
+The ``docn`` module also provides convenience functions that will
+open important web pages at the SSC in your default browser.  For
 convenience, these are all inserted into the ``batse5bp`` namespace:
 
 ``docn.show_ssc()``
   Show the COSSC web site.
+
+``docn.show_archive()``
+  Show a description of the CGRO data archive contents, including a list of the
+  available detailed data types.
 
 ``docn.show_4B()``
   Show the 4B catalog web site.
@@ -276,6 +284,14 @@ convenience, these are all inserted into the ``batse5bp`` namespace:
 ``docn.show_problems()``
   Show the BATSE data problems archive.
 
+``docn.show_tech()``
+  Show the the BATSE technical description from the CGRO GI program RA,
+  with basic information about the detailed data types.
+
+``docn.show_sw()``
+  Show the SSC software directory.
+
+
 The problems archive has text files identified by trigger number that
 describe problems with the data for a few dozen bursts, beyond what
 is mentioned in the Comments table.
@@ -286,6 +302,21 @@ The GRB object: Detailed data
 
 ``GRB`` instances provide access to some of the detailed data for each
 GRB stored at the SSC in FITS files and files of other formats.
+
+When a user firsts requests access to a particular detailed data type, the
+corresponding FITS file is fetched from the SSC and stored in the `raw_cache`
+directory within the database directory.  The file is parsed, and the parsed
+data is cached elsewhere in the database.  Future access of the data will access
+the already-parsed cached version.  The FITS file is not deleted after parsing,
+but the user can delete any of the contents of the `raw_cache` directory (e.g.,
+to reclaim space); FITS files will not be re-downloaded if they have been
+previously downloaded and parsed.
+
+Users who examine FITS file contents not exposed by ``batse5bp`` may note
+that the sky locations in the FITS header for a trigger need not match
+the catalog location.  The catalog locations were calculated after the
+locations in the detailed data FITS headers using improved algorithms.
+This is discussed further in the `SSC trigger archive README file <ftp://legacy.gsfc.nasa.gov/compton/data/batse/trigger//00000README>`_.
 
 Light curve plots
 ~~~~~~~~~~~~~~~~~
@@ -455,7 +486,7 @@ triggered detector.
     The DRM as an ``n_ch`` by ``n_E`` array.
 
 ``crv``
-    A list of ``n_ch`` channel response vectors, each an array of
+    A list of ``n_ch`` channel response vectors (CRVs), each an array of
     length ``n_E``.  These are just different views of the DRM,
     useful for calculating expected count rates for individual channels.
 
@@ -469,8 +500,8 @@ The summed response of the triggered detectors (the *detector-summed* response)
 is available via similar attributes of ``discsc_drms`` itself: ``ch_bins``,
 ``E_bins``, ``drm``, ``crv``, and ``start``.
 
-The following block of code plots the summed response for all four DISC
-channels in a single figure.  Note that ``E_vals`` is set equal to the
+The following block of code plots the detector-summed response for each of the
+four DISC channels in a single figure.  Note that ``E_vals`` is set equal to the
 incident energy bin centers.
 
 ::
@@ -486,7 +517,7 @@ incident energy bin centers.
         xlabel(r'$E$ (keV)')
         ylabel(r'$R_i(E)$ (cm$^2$)')
 
-``DRMs_DISCSC`` provides methods for numerical integrattion of the product
+``DRMs_DISCSC`` provides methods for numerical integration of the product
 of an incident spectrum model and the response function for each channel; the
 result is the expected number of detected photons ("counts") in the channel.
 This quadrature capability is provided only for the *detector-summed* response.
@@ -510,7 +541,8 @@ burst's DISC data, call the ``set_sum_prodquad`` method of the burst's
 ``DRMs_DISCSC`` object. This defines a product quadrature rule for each channel;
 it also compiles the nodes (incident energy values used in the rules) and makes
 them available as an array via the ``quad_nodes`` attribute, so
-``quad_nodes[i,j]`` returns the ``j'th`` energy value for channel ``i``. The
+``quad_nodes[j]`` returns the ``j'th`` energy value (the nodes are the same
+for all channels). The
 ``chan_quad(i, spec)`` method calculates the quadrature for channel ``i`` for
 input spectrum ``spec``. The spectrum can be provided as a function (of incident
 photon energy), or as a vector of values pre-calculated on the nodes (this will
@@ -529,7 +561,7 @@ array arguments.
 
     drms = grb.discsc_drms
     drms.set_sum_prodquad()
-    svals = spec(drms.quad_nodes[0,:])  # channels have common E values
+    svals = spec(drms.quad_nodes)  # channels have common E values
     exp_cts_0 = drms.chan_quad(0, svals)
     exp_cts_1 = drms.chan_quad(1, svals)
 

@@ -6,20 +6,32 @@ Created 2012-05-07 by Tom Loredo
 
 import webbrowser
 
-__all__ = ['show_ssc', 'show_4B', 'show_5Bp', 'show_problems']
+__all__ = ['show_ssc', 'show_archive', 'show_tech', 'show_sw',
+           'show_4B', 'show_5Bp', 'show_problems']
 
 
-# Access to 4B, 5Bp ("Current") catalog web pages:
+# Access to CGRO SSC documents, incl. 4B, 5Bp ("Current") catalog web pages:
 url_ssc = 'http://heasarc.gsfc.nasa.gov/docs/cgro/'
+url_archive = 'http://heasarc.gsfc.nasa.gov/docs/journal/cgro7.html'
+url_tech = 'http://heasarc.gsfc.nasa.gov/docs/cgro/cossc/nra/appendix_g.html#V.%20BATSE%20GUEST%20INVESTIGATOR%20PROGRAM'
+url_sw = 'ftp://legacy.gsfc.nasa.gov/compton/software/'
 url_4B = 'http://gammaray.msfc.nasa.gov/batse/grb/catalog/4b/'
 url_5Bp = 'http://gammaray.msfc.nasa.gov/batse/grb/catalog/current/'
 url_problems = 'ftp://legacy.gsfc.nasa.gov/compton/data/batse/trigger/data_problems/'
+
 
 def show_ssc():
     """
     Show the COSSC web site in the user's default web browser.
     """
     webbrowser.open(url_ssc)
+
+def show_archive():
+    """
+    Show the *Legacy* article with a CGRO archive web site overview in the
+    user's default web browser.
+    """
+    webbrowser.open(url_archive)
 
 def show_4B():
     """
@@ -38,6 +50,19 @@ def show_problems():
     Show the BATSE data problems archive in the user's default web browser.
     """
     webbrowser.open(url_problems)
+
+def show_tech():
+    """
+    Display the BATSE technical description (from the CGRO GI program RA) in the
+    user's default web browser.
+    """
+    webbrowser.open(url_tech)
+
+def show_sw():
+    """
+    Display the SSC software directory in the user's default web browser.
+    """
+    webbrowser.open(url_sw)
 
 
 # Basic table description:
