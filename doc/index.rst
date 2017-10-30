@@ -19,7 +19,7 @@ The batse5bp package
 Introduction
 ------------
 
-The batse5bp package provides persistant local access to BATSE GRB data hosted
+The ``batse5bp`` package provides persistant local access to BATSE GRB data hosted
 at the CGRO SSC.  It accesses both the BATSE GRB **catalog** (a collection of
 basic properties of all detected bursts, such as directions, intensities, and
 durations), and **detailed GRB data** (e.g., time
@@ -42,7 +42,8 @@ cached locally for subsequent access.
 Cached data is stored in a local file hierarchy with a structure resembling
 that of the SSC archive.  Files and folders may be deleted within the local
 filesystem when no longer needed; they will be re-fetched as necessary.  There
-is no monolithic database file, and no dependencies on database software.
+is no monolithic database file, and no dependencies on 3rd-party database
+software.
 
 
 Installation
