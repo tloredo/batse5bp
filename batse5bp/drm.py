@@ -25,7 +25,8 @@ from os.path import join, exists
 import cPickle
 
 from numpy import zeros, minimum, array, array_equal
-import pyfits
+# import pyfits
+from astropy.io import fits
 
 from prodquad import ProdQuadRule, CompositeQuad
 
@@ -95,8 +96,10 @@ class DRM_DISCSC:
     def __init__(self, row_data, n_ch, n_E):
         """
         Retrieve DRM info from a single row of parsed binary FITS table data.
-        """ 
+        """
+        # Copy FITS TTYPE data as attributes.
         for col, info in self.fields.items():
+            # info[0] is the column name; info[1] is the FITS comment.
             setattr(self, info[0], row_data[col])
 
         self.det_num = self.DET_NUM
@@ -204,7 +207,7 @@ class DRMs_DISCSC:
         Read DRM data from a FITS file.  The path `fname` may be to a gzipped
         version.  Archive the data at the DRM file paths.
         """
-        hdus = pyfits.open(fits_path)
+        hdus = fits.open(fits_path)
         primary = hdus[0].header
 
         # Verify some key primary header elements.
@@ -357,6 +360,7 @@ class DRMs_DISCSC:
         # Otherwise we have to modify the rules to fit the range.
         wts = []
         for ch in range(self.n_ch):
+            print '*** Ch:', ch
             nodes, ch_wts = self.quad_rules[ch].range_nodes_wts(l, u)
             wts.append(ch_wts)
         return nodes, wts

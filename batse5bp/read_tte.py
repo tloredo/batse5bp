@@ -23,7 +23,8 @@ Modified: 01 Jun 2000 TL
           2012-05-09 TJL - Adapt for batse5bp
 """
 
-import pyfits
+# import pyfits
+from astropy.io import fits
 from numpy import not_equal, array
 
 from utils import write_seq
@@ -178,7 +179,7 @@ class TTE(object):
         the binary data into a more usable form."""
 
         # Open the file and read and save the primary header.
-        hdus = pyfits.open(fname)
+        hdus = fits.open(fname)
         self.primary = hdus[0]
 
         # Read the IBDB binary extension, close the file, and gather
